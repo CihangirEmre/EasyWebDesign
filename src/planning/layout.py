@@ -23,6 +23,12 @@ DEFAULT_BAND_OVERLAP_THRESHOLD = 0.5
 # sütunları genelde birbirine yakın genişliktedir; bir sidebar ise ana
 # içerikten çok daha dardır).
 DEFAULT_COLUMN_WIDTH_RATIO_THRESHOLD = 2.0
+# İki komşu eleman arasındaki X boşluğu, kendi ortalama genişliklerinin bu
+# katından fazlaysa artık "aynı satır" değil, alakasız iki grup sayılır.
+# Bulundu: aynı y-bandında olan ama aralarında büyük X mesafesi olan iki
+# öğe (ör. sidebar'daki bir liste öğesi ile ana içerikteki bir buton grubu,
+# sırf y-aralıkları örtüştüğü için) yanlışlıkla tek satır sayılıyordu.
+DEFAULT_MAX_GAP_RATIO = 2.5
 
 
 def _cluster_by_axis(nodes: list[Node], range_fn, overlap_threshold: float) -> list[dict]:
@@ -55,6 +61,53 @@ def _columns_align(
         if abs(center_a - center_b) > width * tolerance_ratio:
             return False
     return True
+
+
+def _split_by_gap(
+    nodes_sorted: list[Node], *, start_idx: int, end_idx: int, max_gap_ratio: float = DEFAULT_MAX_GAP_RATIO
+) -> list[list[Node]]:
+    """Ana eksende sıralı node'ları, komşu elemanların kendi boyutlarına göre
+    aşırı büyük bir X/Y boşluğu olan noktalardan alt gruplara böler.
+
+    Neden gerekli: bir y-bandındaki tüm elemanlar y-ekseninde örtüşse bile,
+    aralarında (kendi boyutlarına oranla) devasa bir boşluk varsa bunlar
+    aslında alakasız iki grup olabilir (ör. solda dar bir sidebar öğesi,
+    sağda çok uzakta bir buton grubu — ikisi de benzer y-aralığında ama
+    hiç ilişkili değiller). Pilot testte tam bu senaryo yakalandı.
+    """
+    if len(nodes_sorted) <= 1:
+        return [nodes_sorted]
+
+    groups: list[list[Node]] = [[nodes_sorted[0]]]
+    for prev, cur in zip(nodes_sorted, nodes_sorted[1:]):
+        gap = cur.bbox[start_idx] - prev.bbox[end_idx]
+        avg_size = ((prev.bbox[end_idx] - prev.bbox[start_idx]) + (cur.bbox[end_idx] - cur.bbox[start_idx])) / 2
+        if avg_size > 0 and gap > avg_size * max_gap_ratio:
+            groups.append([])
+        groups[-1].append(cur)
+    return groups
+
+
+def _split_row_into_entries(
+    nodes_sorted_x: list[Node], *, next_id: Callable[[], str]
+) -> tuple[list[Node], bool]:
+    """Bir "satır" adayını gap'e göre alt gruplara böler; her çok-elemanlı
+    alt grup kendi flex-row wrapper'ına sarılır, tekil elemanlar olduğu gibi
+    kalır. İkinci dönen değer: hiç bölünme olmadıysa True (çağıran taraf
+    orijinal düz listeyi tek bir row olarak işleyebilir)."""
+    groups = _split_by_gap(nodes_sorted_x, start_idx=0, end_idx=2)
+    if len(groups) == 1:
+        return nodes_sorted_x, True
+
+    entries: list[Node] = []
+    for g in groups:
+        if len(g) == 1:
+            entries.append(g[0])
+        else:
+            wrapper = Node(id=next_id(), label=None, bbox=union_bbox([n.bbox for n in g]), children=g, synthetic=True)
+            wrapper.layout = _build_axis_layout(g, wrapper.bbox, direction="row")
+            entries.append(wrapper)
+    return entries, False
 
 
 def _estimate_gap(ordered_nodes: list[Node], *, main_start_idx: int, main_end_idx: int) -> float:
@@ -205,6 +258,14 @@ def infer_layout_for_children(
     y_bands = _cluster_by_axis(children, y_range, overlap_threshold)
 
     if len(y_bands) == 1:
+        # NOT: burada gap-split UYGULANMAZ — bu dal, tüm children kümesinin
+        # zaten tek bir y-bandında olduğu (genelde gerçek/kapsanmış bir
+        # container'ın tüm çocukları, ör. bir header'ın logo+link+buton'u)
+        # güçlü bir sinyal. justify:space-between gibi kasıtlı geniş
+        # boşluklu satırlar burada yanlışlıkla bölünmemeli — gap-split'i
+        # sadece aşağıdaki "karışık bantlar içinde tekil kalan bant" dalında
+        # (containment'a değil, salt y-örtüşmesine dayanan daha zayıf bir
+        # sinyal) uyguluyoruz.
         row_nodes = sorted(children, key=lambda n: n.bbox[0])
         return row_nodes, _build_axis_layout(row_nodes, parent_bbox, direction="row")
 
@@ -263,14 +324,15 @@ def infer_layout_for_children(
             new_children.append(wrapper)
             i = j
         else:
+            row_children, _ = _split_row_into_entries(band_nodes, next_id=next_id)
             wrapper = Node(
                 id=next_id(),
                 label=None,
                 bbox=union_bbox([n.bbox for n in band_nodes]),
-                children=band_nodes,
+                children=row_children,
                 synthetic=True,
             )
-            wrapper.layout = _build_axis_layout(band_nodes, wrapper.bbox, direction="row")
+            wrapper.layout = _build_axis_layout(row_children, wrapper.bbox, direction="row")
             new_children.append(wrapper)
             i += 1
 

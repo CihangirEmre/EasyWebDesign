@@ -53,15 +53,20 @@ def _build_node(plan_node: dict, image: Image.Image, next_id) -> dict:
     if tag in IMAGE_TAGS:
         node["content"] = None
         node["asset_ref"] = f"assets/{node['id']}_{role or tag}.png"
-    elif not children and not text and looks_photographic(image, bbox_px):
-        # Etiketi "image" olmasa bile (ör. grounding'in "card" dediği bir
-        # video thumbnail'ı), piksel varyansı fotoğraf gibi görünüyorsa
-        # asset_ref ata — generation bunu background-image olarak kullanmalı.
-        node["content"] = None
-        node["asset_ref"] = f"assets/{node['id']}_{role or tag}.png"
-    elif tag in TEXT_BEARING_TAGS:
-        if text:
+    else:
+        # Etiketi "image" olmasa bile (ör. grounding'in bir video thumbnail'ını
+        # başlık/kanal/izlenme metniyle BİRLİKTE tek "card" olarak etiketlediği
+        # gözlemlendi), piksel varyansı fotoğraf gibi görünüyorsa asset_ref ata.
+        # Metin varlığı bunu ENGELLEMEMELİ — bir kart hem arka plan fotoğrafı
+        # hem üstünde yazı taşıyabilir (generation background-image + içerik
+        # metni olarak render etmeli).
+        is_photo = not children and looks_photographic(image, bbox_px)
+        if is_photo:
+            node["asset_ref"] = f"assets/{node['id']}_{role or tag}.png"
+        if text and (is_photo or tag in TEXT_BEARING_TAGS):
             node["content"] = text
+        elif is_photo:
+            node["content"] = None
 
     if children:
         node["children"] = [_build_node(c, image, next_id) for c in children]
