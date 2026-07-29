@@ -2,8 +2,14 @@
 Aşama 2b) çevirme.
 
 Girdi: src/planning'in ürettiği ağaç (node_to_dict çıktısı) — bbox 0-1000
-normalize, label/synthetic/layout/children alanları var.
+normalize, label/text/synthetic/layout/children alanları var.
 Çıktı: CLAUDE.md'de sabitlenmiş `ui-to-code-formatting-schema-v1` JSON'u.
+
+Not: content alanı Aşama 1'in ("text") çıktısından geliyor — ayrı bir OCR
+adımı YOK. İlk pilotta pytesseract denenmiş, küçük/stilize UI fontlarında
+anlamsız string ürettiği görülmüş; Qwen3-VL zaten aynı görseli okuduğu için
+metni de aynı geçişte okutmak (bkz. src/grounding/prompts.py) çok daha
+güvenilir çıktı verdi.
 """
 
 from __future__ import annotations
@@ -14,9 +20,8 @@ from PIL import Image
 
 from src.grounding.coords import denormalize_bbox
 
-from .content import extract_content
 from .style import extract_style
-from .tags import IMAGE_TAGS, resolve_tag
+from .tags import IMAGE_TAGS, TEXT_BEARING_TAGS, resolve_tag
 
 SCHEMA_VERSION = "ui-to-code-formatting-schema-v1"
 
@@ -45,10 +50,10 @@ def _build_node(plan_node: dict, image: Image.Image, next_id) -> dict:
     if tag in IMAGE_TAGS:
         node["content"] = None
         node["asset_ref"] = f"assets/{node['id']}_{role or tag}.png"
-    else:
-        content = extract_content(image, bbox_px, tag)
-        if content is not None:
-            node["content"] = content
+    elif tag in TEXT_BEARING_TAGS:
+        text = plan_node.get("text")
+        if text:
+            node["content"] = text
 
     children = plan_node.get("children")
     if children:

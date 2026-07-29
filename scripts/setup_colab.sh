@@ -9,13 +9,7 @@
 set -e
 
 pip install -q -r requirements.txt
-pip install -q -r requirements-formatting.txt
 pip install -q -r requirements-generation.txt
 pip install -q -r requirements-grounding.txt
 
 playwright install --with-deps chromium
-
-# Opsiyonel: requirements-formatting.txt'teki pytesseract'ın çalışması için
-# sistem binary'si (kurulu değilse content alanı sessizce None kalır, pipeline
-# hata vermez — bu yüzden opsiyonel).
-apt-get install -y -qq tesseract-ocr > /dev/null

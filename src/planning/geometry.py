@@ -33,14 +33,22 @@ def containment_ratio(outer: BBox, inner: BBox) -> float:
 
 
 def axis_overlap_ratio(a_range: tuple[float, float], b_range: tuple[float, float]) -> float:
-    """İki 1D aralığın örtüşme oranı — daha kısa aralığa göre normalize (0-1)."""
+    """İki 1D aralığın örtüşme oranı — kesişim/birleşim (Jaccard, 0-1).
+
+    Kısa aralığa göre normalize etmek YANLIŞ: küçük bir eleman (ör. 24px'lik
+    bir sidebar metni), çok daha uzun bir elemanın (ör. 285px'lik bir video
+    thumbnail'ı) aralığına tamamen düşerse oran hep 1.0 çıkar ve ikisi
+    görsel olarak aynı "satırda" olmasa da aynı banda düşer — bu gerçek bir
+    pilot testte (sidebar'ın video ızgarasıyla birleşmesi) tespit edildi.
+    Jaccard, boy farkı büyük elemanları artık aynı satır saymıyor.
+    """
     a1, a2 = a_range
     b1, b2 = b_range
     inter = max(0.0, min(a2, b2) - max(a1, b1))
-    shorter = min(a2 - a1, b2 - b1)
-    if shorter <= 0:
+    union = max(a2, b2) - min(a1, b1)
+    if union <= 0:
         return 0.0
-    return inter / shorter
+    return inter / union
 
 
 def y_range(box: BBox) -> tuple[float, float]:

@@ -19,6 +19,7 @@ from pathlib import Path
 from .inference import run_generation
 from .model import DEFAULT_MODEL_ID, load_generation_model
 from .postprocess import extract_html
+from .repair import repair_image_srcs
 
 
 def run(
@@ -36,10 +37,12 @@ def run(
     for schema_path in sorted(formatted_dir.glob("*_formatted.json")):
         stem = schema_path.stem.removesuffix("_formatted")
         schema_json = schema_path.read_text(encoding="utf-8")
+        schema = json.loads(schema_json)
 
         print(f"→ İşleniyor: {stem}")
         raw_text = run_generation(model, tokenizer, schema_json, max_new_tokens=max_new_tokens)
         html = extract_html(raw_text)
+        html = repair_image_srcs(html, schema["root"])
 
         (output_dir / f"{stem}_raw.txt").write_text(raw_text, encoding="utf-8")
         (output_dir / f"{stem}.html").write_text(html, encoding="utf-8")

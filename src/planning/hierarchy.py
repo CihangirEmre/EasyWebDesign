@@ -25,6 +25,7 @@ class Node:
     id: str
     label: str | None
     bbox: list[float]
+    text: str | None = None
     children: list["Node"] = field(default_factory=list)
     layout: dict | None = None
     synthetic: bool = False
@@ -37,7 +38,7 @@ def build_containment_tree(
 ) -> Node:
     """Düz tespit listesinden containment ağacı kurar; kök her zaman [0,0,1000,1000]."""
     nodes = [
-        Node(id=f"g{i}", label=d.get("label"), bbox=list(d["bbox_2d"]))
+        Node(id=f"g{i}", label=d.get("label"), bbox=list(d["bbox_2d"]), text=d.get("text"))
         for i, d in enumerate(detections)
     ]
 

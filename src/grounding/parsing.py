@@ -1,8 +1,8 @@
 """Aşama 1 — Grounding: model çıktısını parse etme ve dedupe.
 
 Karar (CLAUDE.md §2, Aşama 1): Model çıktısı konum (bbox) + serbest metin
-etiket verir; tam tutarlılık (deduplication/çakışma temizleme) pipeline'da
-ayrıca yapılmalı.
+etiket (+ görünür metin, "text" alanı) verir; tam tutarlılık (deduplication/
+çakışma temizleme) pipeline'da ayrıca yapılmalı.
 """
 
 from __future__ import annotations
@@ -12,12 +12,15 @@ import re
 
 from .coords import compute_iou
 
-_BBOX_PATTERN = r'\{\s*"bbox_2d"\s*:\s*\[[\d,\s]+\]\s*,\s*"label"\s*:\s*"[^"]*"\s*\}'
+# Tek seviyeli (iç içe olmayan) JSON obje bloklarını yakalar — "text" gibi
+# ek/opsiyonel alanların sırası/varlığı önemli değil, json.loads ile
+# doğrulanıp bbox_2d+label zorunluluğu ayrıca kontrol edilir.
+_JSON_OBJECT_PATTERN = r"\{[^{}]*\}"
 
 
 def parse_grounding_output(raw_text: str) -> list[dict]:
     """Model çıktısındaki JSON tespitlerini ayıklar; bozuk/tekrar eden kayıtları atlar."""
-    matches = re.findall(_BBOX_PATTERN, raw_text)
+    matches = re.findall(_JSON_OBJECT_PATTERN, raw_text)
 
     detections: list[dict] = []
     seen: set[tuple] = set()
@@ -25,6 +28,8 @@ def parse_grounding_output(raw_text: str) -> list[dict]:
         try:
             obj = json.loads(m)
         except json.JSONDecodeError:
+            continue
+        if "bbox_2d" not in obj or "label" not in obj:
             continue
         key = (tuple(obj["bbox_2d"]), obj["label"])
         if key in seen:

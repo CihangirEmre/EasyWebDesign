@@ -32,6 +32,8 @@ def node_to_dict(node: Node) -> dict:
     d: dict = {"id": node.id, "bbox_2d": node.bbox}
     if node.label is not None:
         d["label"] = node.label
+    if node.text is not None:
+        d["text"] = node.text
     if node.synthetic:
         d["synthetic"] = True
     if node.layout is not None:

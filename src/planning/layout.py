@@ -17,6 +17,12 @@ from .geometry import area, axis_overlap_ratio, union_bbox, x_range, y_range
 from .hierarchy import Node
 
 DEFAULT_BAND_OVERLAP_THRESHOLD = 0.5
+# Sütun (yan yana bölge, ör. sidebar | ana içerik) tespiti için: bandlar
+# arasındaki genişlik oranı bu eşiği aşarsa "homojen bir grid'in sütunları"
+# değil, "birbirinden bağımsız iki bölge" olduğu varsayılır (bir grid'in
+# sütunları genelde birbirine yakın genişliktedir; bir sidebar ise ana
+# içerikten çok daha dardır).
+DEFAULT_COLUMN_WIDTH_RATIO_THRESHOLD = 2.0
 
 
 def _cluster_by_axis(nodes: list[Node], range_fn, overlap_threshold: float) -> list[dict]:
@@ -103,6 +109,73 @@ def _build_axis_layout(ordered_nodes: list[Node], parent_bbox: list[float], *, d
     }
 
 
+def _column_split_indicated(x_bands: list[dict], num_children: int, parent_bbox: list[float]) -> bool:
+    """x-bandları gerçek bir sütun (yan yana bölge) ayrımına mı işaret
+    ediyor, yoksa homojen bir grid'in sütunlarına ya da art arda dizilmiş
+    (sıralı) sayfa bölümlerine mi?
+
+    İki ayrı yanlış-pozitif riski var:
+    1. Homojen grid'lerde sütun genişlikleri birbirine yakındır — genişlik
+       oranı büyükse gerçek bir sütun ayrımı (dar sidebar vs geniş içerik).
+    2. Header/footer gibi aralarında hiçbir y-örtüşmesi olmayan, sırf ikisi
+       de tam genişlikte olduğu için X-kümelemesinde "aynı bant"a düşen
+       elemanlar — bunlar sütun değil, art arda dizilmiş bölümlerdir. Bunu
+       elemek için: çocukların toplam kapladığı dikey alan, ebeveynin
+       yüksekliğinin büyük kısmını (>%70) kaplıyorsa bu sıralı bölümlerdir,
+       yan yana sütunlar değil (gerçek sütunlar yerelde/dar bir dikey
+       aralıkta bir arada bulunur).
+    """
+    if not (2 <= len(x_bands) < num_children):
+        return False
+    if not any(len(b["nodes"]) > 1 for b in x_bands):
+        return False
+    widths = [b["range"][1] - b["range"][0] for b in x_bands]
+    if min(widths) <= 0:
+        return False
+    if max(widths) / min(widths) <= DEFAULT_COLUMN_WIDTH_RATIO_THRESHOLD:
+        return False
+
+    all_nodes = [n for b in x_bands for n in b["nodes"]]
+    overall_y_min = min(n.bbox[1] for n in all_nodes)
+    overall_y_max = max(n.bbox[3] for n in all_nodes)
+    parent_height = parent_bbox[3] - parent_bbox[1]
+    if parent_height > 0 and (overall_y_max - overall_y_min) / parent_height > 0.7:
+        return False
+
+    return True
+
+
+def _build_column_split(
+    x_bands: list[dict],
+    parent_bbox: list[float],
+    *,
+    next_id: Callable[[], str],
+    overlap_threshold: float,
+) -> tuple[list[Node], dict]:
+    """Yan yana duran bağımsız bölgeleri (sidebar | ana içerik gibi) bir
+    flex-row'a, her bölgeyi ise KENDİ iç düzenini bulmak üzere recursive
+    olarak infer_layout_for_children'a geri gönderir."""
+    bands_sorted = sorted(x_bands, key=lambda b: b["range"][0])
+    new_children: list[Node] = []
+
+    for b in bands_sorted:
+        nodes = b["nodes"]
+        if len(nodes) == 1:
+            new_children.append(nodes[0])
+            continue
+
+        band_bbox = union_bbox([n.bbox for n in nodes])
+        sub_children, sub_layout = infer_layout_for_children(
+            nodes, band_bbox, next_id=next_id, overlap_threshold=overlap_threshold
+        )
+        wrapper = Node(id=next_id(), label=None, bbox=band_bbox, children=sub_children, synthetic=True)
+        wrapper.layout = sub_layout
+        new_children.append(wrapper)
+
+    layout = _build_axis_layout(new_children, parent_bbox, direction="row")
+    return new_children, layout
+
+
 def infer_layout_for_children(
     children: list[Node],
     parent_bbox: list[float],
@@ -116,6 +189,10 @@ def infer_layout_for_children(
     """
     if len(children) <= 1:
         return children, None
+
+    x_bands = _cluster_by_axis(children, x_range, overlap_threshold)
+    if _column_split_indicated(x_bands, len(children), parent_bbox):
+        return _build_column_split(x_bands, parent_bbox, next_id=next_id, overlap_threshold=overlap_threshold)
 
     y_bands = _cluster_by_axis(children, y_range, overlap_threshold)
 
