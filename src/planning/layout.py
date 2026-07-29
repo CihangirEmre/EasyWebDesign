@@ -29,6 +29,11 @@ DEFAULT_COLUMN_WIDTH_RATIO_THRESHOLD = 2.0
 # öğe (ör. sidebar'daki bir liste öğesi ile ana içerikteki bir buton grubu,
 # sırf y-aralıkları örtüştüğü için) yanlışlıkla tek satır sayılıyordu.
 DEFAULT_MAX_GAP_RATIO = 2.5
+# En geniş bant ile diğerlerinin birleşiminin (containment-tarzı, kısa
+# aralığa göre normalize) örtüşme oranı bu eşiği aşmalı — gerçek yan yana
+# sütunlarda (sidebar | ana içerik) biri diğerinin kapsama alanına düşer;
+# ardışık bölümler (header sonra footer) hiç örtüşmez (oran ~0).
+DEFAULT_MIN_COLUMN_Y_OVERLAP = 0.5
 
 
 def _cluster_by_axis(nodes: list[Node], range_fn, overlap_threshold: float) -> list[dict]:
@@ -196,12 +201,37 @@ def _column_split_indicated(x_bands: list[dict], num_children: int, parent_bbox:
     if parent_width > 0 and max(widths) / parent_width > 0.85:
         return False
 
-    all_nodes = [n for b in x_bands for n in b["nodes"]]
-    overall_y_min = min(n.bbox[1] for n in all_nodes)
-    overall_y_max = max(n.bbox[3] for n in all_nodes)
-    parent_height = parent_bbox[3] - parent_bbox[1]
-    if parent_height > 0 and (overall_y_max - overall_y_min) / parent_height > 0.7:
-        return False
+    # Gerçek sütunlar YAN YANA var olur. Bunu şöyle test ediyoruz: en geniş
+    # bandı (muhtemelen ana içerik/sidebar'lardan biri) diğer TÜM bantların
+    # BİRLEŞİMİYLE (tek tek ikili eşleştirme değil — aksi halde sidebar'ın
+    # kendi içinde parçalanmış alt-bantları birbirleriyle kıyaslanır, ki
+    # bunların örtüşmesi gerekmez, sadece sidebar'ın TAMAMI ile ana içeriğin
+    # örtüşmesi gerekir) karşılaştırıyoruz. Ayrıca oranı KISA aralığa göre
+    # normalize ediyoruz (containment-tarzı, Jaccard değil): ana içerik genelde
+    # sidebar'dan çok daha KISA bir dikey aralıkta (sayfanın ortasında)
+    # kalır — asıl soru "ana içeriğin bulunduğu aralık, sidebar'ın kapsama
+    # alanına düşüyor mu", ikisinin oranının simetrik olması değil.
+    # NOT: Önceki versiyonda "toplam dikey kaplama alanı ebeveyn yüksekliğinin
+    # >%70'ini geçmemeli" kuralı vardı; bu, tam-yükseklik gerçek bir sidebar'ı
+    # yanlışlıkla engelliyordu — gerçek pilot testte yakalandı.
+    primary_bands = [b for b in x_bands if len(b["nodes"]) > 1]
+    if len(primary_bands) >= 2:
+        band_y_ranges = [
+            (b, min(n.bbox[1] for n in b["nodes"]), max(n.bbox[3] for n in b["nodes"]))
+            for b in primary_bands
+        ]
+        widest_band, widest_y1, widest_y2 = max(
+            band_y_ranges, key=lambda t: t[0]["range"][1] - t[0]["range"][0]
+        )
+        others = [(y1, y2) for b, y1, y2 in band_y_ranges if b is not widest_band]
+        others_y1 = min(y1 for y1, _ in others)
+        others_y2 = max(y2 for _, y2 in others)
+
+        inter = max(0.0, min(widest_y2, others_y2) - max(widest_y1, others_y1))
+        shorter = min(widest_y2 - widest_y1, others_y2 - others_y1)
+        containment_ratio = inter / shorter if shorter > 0 else 0.0
+        if containment_ratio < DEFAULT_MIN_COLUMN_Y_OVERLAP:
+            return False
 
     return True
 
