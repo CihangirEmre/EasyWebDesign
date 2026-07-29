@@ -1,0 +1,4 @@
+# Opsiyonel: OCR (content alanı için). Kurulu değilse content=null kalır,
+# pipeline hata vermez. pytesseract ayrıca sistemde tesseract-ocr binary'si
+# gerektirir (Colab: !apt-get install -y tesseract-ocr).
+pytesseract

@@ -1,0 +1,8 @@
+# transformers buraya dahil değil: requirements-grounding.txt Qwen3-VL desteği
+# için transformers'ı GitHub'dan (bleeding edge) kuruyor; bu dosya stable
+# sürüme downgrade edip o desteği kırmasın diye tekrar etmiyoruz. Aynı ortamda
+# ikisi birlikte kurulacaksa requirements-grounding.txt SONRA kurulmalı
+# (bkz. scripts/setup_colab.sh).
+accelerate
+bitsandbytes
+torch
