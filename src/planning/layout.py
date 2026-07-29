@@ -135,6 +135,14 @@ def _column_split_indicated(x_bands: list[dict], num_children: int, parent_bbox:
     if max(widths) / min(widths) <= DEFAULT_COLUMN_WIDTH_RATIO_THRESHOLD:
         return False
 
+    # Hiçbir bant ebeveynin genişliğinin neredeyse tamamını kaplamamalı —
+    # kaplıyorsa bu bir sütun değil, tam genişlikte ayrı bir bölümdür (ör.
+    # bir header/footer, altındaki kart grid'inden bağımsız olarak "sütun"
+    # sayılmamalı, sırf bant genişlik oranı testini geçti diye).
+    parent_width = parent_bbox[2] - parent_bbox[0]
+    if parent_width > 0 and max(widths) / parent_width > 0.85:
+        return False
+
     all_nodes = [n for b in x_bands for n in b["nodes"]]
     overall_y_min = min(n.bbox[1] for n in all_nodes)
     overall_y_max = max(n.bbox[3] for n in all_nodes)

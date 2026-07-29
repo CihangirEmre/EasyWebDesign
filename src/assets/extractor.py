@@ -12,13 +12,14 @@ from pathlib import Path
 from PIL import Image
 
 
-def find_image_nodes(node: dict) -> list[dict]:
-    """Şema ağacında tag=='img' olan tüm node'ları (derinlik farketmeksizin) toplar."""
+def find_asset_nodes(node: dict) -> list[dict]:
+    """Şema ağacında `asset_ref` alanı olan tüm node'ları (tag'i img olsun
+    olmasın — ör. fotoğraf-benzeri bir <section> de olabilir) toplar."""
     nodes: list[dict] = []
-    if node.get("tag") == "img":
+    if node.get("asset_ref"):
         nodes.append(node)
     for child in node.get("children", []):
-        nodes.extend(find_image_nodes(child))
+        nodes.extend(find_asset_nodes(child))
     return nodes
 
 
@@ -42,10 +43,7 @@ def extract_assets(schema: dict, image: Image.Image, output_dir: str | Path) -> 
     """
     output_dir = Path(output_dir)
     saved: list[Path] = []
-    for node in find_image_nodes(schema["root"]):
-        asset_ref = node.get("asset_ref")
-        if not asset_ref:
-            continue
-        save_path = crop_and_save(image, node["bbox"], output_dir / asset_ref)
+    for node in find_asset_nodes(schema["root"]):
+        save_path = crop_and_save(image, node["bbox"], output_dir / node["asset_ref"])
         saved.append(save_path)
     return saved

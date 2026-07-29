@@ -20,7 +20,7 @@ from PIL import Image
 
 from src.grounding.coords import denormalize_bbox
 
-from .style import extract_style
+from .style import extract_style, looks_photographic
 from .tags import IMAGE_TAGS, TEXT_BEARING_TAGS, resolve_tag
 
 SCHEMA_VERSION = "ui-to-code-formatting-schema-v1"
@@ -47,15 +47,22 @@ def _build_node(plan_node: dict, image: Image.Image, next_id) -> dict:
     if style:
         node["style"] = style
 
+    children = plan_node.get("children")
+    text = plan_node.get("text")
+
     if tag in IMAGE_TAGS:
         node["content"] = None
         node["asset_ref"] = f"assets/{node['id']}_{role or tag}.png"
+    elif not children and not text and looks_photographic(image, bbox_px):
+        # Etiketi "image" olmasa bile (ör. grounding'in "card" dediği bir
+        # video thumbnail'ı), piksel varyansı fotoğraf gibi görünüyorsa
+        # asset_ref ata — generation bunu background-image olarak kullanmalı.
+        node["content"] = None
+        node["asset_ref"] = f"assets/{node['id']}_{role or tag}.png"
     elif tag in TEXT_BEARING_TAGS:
-        text = plan_node.get("text")
         if text:
             node["content"] = text
 
-    children = plan_node.get("children")
     if children:
         node["children"] = [_build_node(c, image, next_id) for c in children]
 
