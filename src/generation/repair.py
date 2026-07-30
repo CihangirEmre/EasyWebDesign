@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import re
 
+import bs4
+
 _IMG_TAG_PATTERN = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
 _ATTR_PATTERN_TEMPLATE = r'{attr}\s*=\s*"[^"]*"'
 
@@ -72,3 +74,32 @@ def repair_image_srcs(html: str, schema_root: dict) -> str:
         fixed_tag = _set_attr(tag, "src", ref)
         result = result.replace(tag, fixed_tag, 1)
     return result
+
+
+def _repair_visible_text(soup: bs4.BeautifulSoup, node: dict) -> None:
+    content = node.get("content")
+    if content and node.get("tag") != "img":
+        el = soup.find(id=node["id"])
+        if el is not None and not el.get_text(strip=True):
+            # el.string = content DEĞİL: node'un gerçek çocukları varsa (ör.
+            # metin + yanında bir ikon) bunları silip yerine tek bir metin
+            # koymak ikonu yok eder. insert(0, ...) mevcut çocukları koruyarak
+            # metni en başa ekler.
+            el.insert(0, content)
+    for child in node.get("children", []):
+        _repair_visible_text(soup, child)
+
+
+def repair_visible_text(html: str, schema_root: dict) -> str:
+    """Gözlem (gerçek Colab çıktısı, Claude.ai): model bazı node'larda görünür
+    metni ("New chat", "Chats" vb.) gerçek bir metin düğümü yerine, boş bir
+    elemanın `content="..."` attribute'una gömdü — bu metin tarayıcıda HİÇ
+    görünmüyor (render'da sidebar'ın tamamı boş çıktı, CLIP score bu yüzden
+    düştü). Prompt'ta "content'i görünür metin yap, attribute yapma" kuralı
+    zaten var ama model buna güvenilir uymadı (bkz. repair.py'nin genel
+    felsefesi) — bu yüzden şemadaki id eşleşmesiyle, o node'un HTML'de hâlâ
+    görünür metni yoksa (get_text boşsa) metni doğrudan enjekte ediyoruz."""
+    soup = bs4.BeautifulSoup(html, "html.parser")
+    for region in schema_root.get("children", [schema_root]):
+        _repair_visible_text(soup, region)
+    return str(soup)
