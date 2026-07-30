@@ -4,8 +4,8 @@
 #
 # Kurulum sırası önemli: requirements-generation.txt (torch/accelerate/
 # bitsandbytes) önce, requirements-grounding.txt EN SON kurulur — o dosya
-# transformers'ı GitHub'dan (Qwen3-VL desteği için bleeding edge) kurar ve
-# başka bir paket onu stable sürüme downgrade etmemeli.
+# transformers'ı GitHub'dan (Qwen3-VL ve Qwen2.5-VL desteği için bleeding
+# edge) kurar ve başka bir paket onu stable sürüme downgrade etmemeli.
 set -e
 
 pip install -q -r requirements.txt

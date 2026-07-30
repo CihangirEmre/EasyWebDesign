@@ -103,15 +103,17 @@ def _run_grounding(normalized_dir: Path, stage1_dir: Path, *, model_id: str, loa
         _empty_cuda_cache()
 
 
-def _run_generation(stage2b_dir: Path, stage4_dir: Path, *, model_id: str, load_in_4bit: bool) -> None:
+def _run_generation(
+    stage2b_dir: Path, images_dir: Path, stage4_dir: Path, *, model_id: str, load_in_4bit: bool
+) -> None:
     from src.generation.model import load_generation_model
     from src.generation.pipeline import run as run_generation
 
-    model, tokenizer = load_generation_model(model_id, load_in_4bit=load_in_4bit)
+    model, processor = load_generation_model(model_id, load_in_4bit=load_in_4bit)
     try:
-        run_generation(stage2b_dir, stage4_dir, model, tokenizer)
+        run_generation(stage2b_dir, images_dir, stage4_dir, model, processor)
     finally:
-        del model, tokenizer
+        del model, processor
         _empty_cuda_cache()
 
 
@@ -136,7 +138,7 @@ def run_full_pipeline(
     images: list[str] | None = None,
     output_dir: str | Path = "pipeline_output",
     grounding_model_id: str = "Qwen/Qwen3-VL-8B-Instruct",
-    generation_model_id: str = "Qwen/Qwen2.5-Coder-7B-Instruct",
+    generation_model_id: str = "Qwen/Qwen2.5-VL-7B-Instruct",
     load_in_4bit: bool = False,
     viewport_width: int = 1280,
     viewport_height: int = 800,
@@ -176,9 +178,9 @@ def run_full_pipeline(
 
     run_assets(output_dir / "stage2b", normalized_dir, output_dir / "stage3")
 
-    print("== Aşama 4: Generation (Qwen2.5-Coder-7B) ==")
+    print("== Aşama 4: Generation (Qwen2.5-VL-7B, bölge bazlı) ==")
     _run_generation(
-        output_dir / "stage2b", output_dir / "stage4",
+        output_dir / "stage2b", normalized_dir, output_dir / "stage4",
         model_id=generation_model_id, load_in_4bit=load_in_4bit,
     )
 
@@ -195,7 +197,7 @@ def main() -> None:
     parser.add_argument("--images", type=str, nargs="+", default=None, help="Görsel dosyası/dosyaları veya klasör")
     parser.add_argument("--output-dir", type=str, default="pipeline_output")
     parser.add_argument("--grounding-model-id", type=str, default="Qwen/Qwen3-VL-8B-Instruct")
-    parser.add_argument("--generation-model-id", type=str, default="Qwen/Qwen2.5-Coder-7B-Instruct")
+    parser.add_argument("--generation-model-id", type=str, default="Qwen/Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--load-in-4bit", action="store_true")
     parser.add_argument("--viewport-width", type=int, default=1280)
     parser.add_argument("--viewport-height", type=int, default=800)
