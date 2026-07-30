@@ -29,7 +29,7 @@ from .inference import run_region_generation
 from .model import DEFAULT_MODEL_ID, load_generation_model
 from .postprocess import extract_html
 from .regions import select_regions
-from .repair import repair_image_srcs
+from .repair import repair_flex_properties, repair_image_srcs
 
 
 def run(
@@ -73,6 +73,7 @@ def run(
             region_htmls.append(extract_html(raw_text))
 
         html = assemble_document(root, region_htmls)
+        html = repair_flex_properties(html)
         html = repair_image_srcs(html, root)
 
         (output_dir / f"{stem}_raw.txt").write_text("\n\n---\n\n".join(raw_texts), encoding="utf-8")

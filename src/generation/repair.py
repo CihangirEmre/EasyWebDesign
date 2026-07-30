@@ -16,6 +16,12 @@ import re
 _IMG_TAG_PATTERN = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
 _ATTR_PATTERN_TEMPLATE = r'{attr}\s*=\s*"[^"]*"'
 
+_FLEX_PROPERTY_FIXES = [
+    (re.compile(r"(?<!flex-)\bdirection\s*:"), "flex-direction:"),
+    (re.compile(r"\bjustify\s*:"), "justify-content:"),
+    (re.compile(r"\balign\s*:"), "align-items:"),
+]
+
 
 def _collect_asset_refs(node: dict) -> list[str]:
     refs: list[str] = []
@@ -31,6 +37,24 @@ def _set_attr(tag: str, attr: str, value: str) -> str:
     if pattern.search(tag):
         return pattern.sub(f'{attr}="{value}"', tag, count=1)
     return tag[:-1].rstrip() + f' {attr}="{value}">'
+
+
+def repair_flex_properties(html: str) -> str:
+    """Gözlem (gerçek Colab çıktısı): model, JSON'un "layout" alanındaki
+    "direction"/"justify"/"align" anahtarlarını CSS PROPERTY ismi sanıp
+    birebir kopyalıyor — doğrusu flex-direction/justify-content/align-items.
+    "direction" ayrıca GERÇEK ama alakasız bir CSS özelliği (metin yönü,
+    yalnızca ltr/rtl kabul eder), bu yüzden tarayıcı geçersiz "column"/"row"
+    değerini sessizce yok sayıp varsayılan satır akışına düşüyor — dikey
+    olması gereken listeler yatay sıkışıp sayfa genişliğini taşırıyor
+    (gözlemlenen: 1280px yerine 4379px full-page render). Prompt'u
+    sıkılaştırmak (bkz. prompts.py) tek başına güvenilir değil, bu yüzden
+    üretilen HTML'deki bu üç hatalı property adı deterministik olarak
+    doğrularıyla değiştiriliyor. "flex-direction:" zaten doğruysa
+    (?<!flex-) lookbehind'i "flex-flex-direction:" çift-önekini engeller."""
+    for pattern, replacement in _FLEX_PROPERTY_FIXES:
+        html = pattern.sub(replacement, html)
+    return html
 
 
 def repair_image_srcs(html: str, schema_root: dict) -> str:

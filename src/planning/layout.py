@@ -201,39 +201,153 @@ def _column_split_indicated(x_bands: list[dict], num_children: int, parent_bbox:
     if parent_width > 0 and max(widths) / parent_width > 0.85:
         return False
 
-    # Gerçek sütunlar YAN YANA var olur. Bunu şöyle test ediyoruz: en geniş
-    # bandı (muhtemelen ana içerik/sidebar'lardan biri) diğer TÜM bantların
-    # BİRLEŞİMİYLE (tek tek ikili eşleştirme değil — aksi halde sidebar'ın
-    # kendi içinde parçalanmış alt-bantları birbirleriyle kıyaslanır, ki
-    # bunların örtüşmesi gerekmez, sadece sidebar'ın TAMAMI ile ana içeriğin
-    # örtüşmesi gerekir) karşılaştırıyoruz. Ayrıca oranı KISA aralığa göre
-    # normalize ediyoruz (containment-tarzı, Jaccard değil): ana içerik genelde
-    # sidebar'dan çok daha KISA bir dikey aralıkta (sayfanın ortasında)
-    # kalır — asıl soru "ana içeriğin bulunduğu aralık, sidebar'ın kapsama
-    # alanına düşüyor mu", ikisinin oranının simetrik olması değil.
+    # Gerçek sütunlar YAN YANA var olur ve birbirleriyle YEREL olarak
+    # örtüşür (sidebar | ana içerik ikisi de sayfanın aynı dikey bölümünde).
+    # Bunu HER bant ÇİFTİ için ikili olarak test ediyoruz — "en geniş bandı,
+    # diğer TÜM bantların BİRLEŞİMİYLE" karşılaştırmak (önceki versiyon)
+    # >2 primary band olduğunda yanlış-pozitif üretiyordu: gerçek bir tam
+    # sayfa örneğinde (bkz. pilot: YouTube ana sayfası) 8 ayrı bant tesadüfen
+    # X ekseninde hizalanmıştı (bir buton + 500px aşağıdaki bir avatar + yine
+    # 900px aşağıdaki bir ikon gibi, aralarında hiçbir ilişki yok) — bu
+    # bantların birleşimi zaten neredeyse tüm sayfa yüksekliğini kapladığı
+    # için "en geniş bant vs birleşim" testi neredeyse her zaman geçiyordu
+    # (ölçülen oran: 1.0), oysa gerçekte alakasız bant ÇİFTLERİ arasında
+    # örtüşme çok düşüktü (ör. 0.30). İkili test bunu doğru reddediyor: her
+    # iki bant GERÇEKTEN aynı yerel dikey bölümde olmalı, sadece "birileri
+    # her yerde" olması yetmez. Ayrıca oranı KISA aralığa göre normalize
+    # ediyoruz (containment-tarzı, Jaccard değil): ana içerik genelde
+    # sidebar'dan çok daha KISA bir dikey aralıkta (sayfanın ortasında) kalır.
     # NOT: Önceki versiyonda "toplam dikey kaplama alanı ebeveyn yüksekliğinin
     # >%70'ini geçmemeli" kuralı vardı; bu, tam-yükseklik gerçek bir sidebar'ı
     # yanlışlıkla engelliyordu — gerçek pilot testte yakalandı.
-    primary_bands = [b for b in x_bands if len(b["nodes"]) > 1]
-    if len(primary_bands) >= 2:
+    # NOT: kontrol SADECE "primary" (>1 node'lu) bantlar arasında değil, TÜM
+    # bantlar arasında (tekil bantlar dahil) yapılmalı — aksi halde tek bir
+    # yalnız eleman (ör. sayfanın çok uzağında, alakasız bir köşe ikonu),
+    # kendi başına "primary" sayılmadığı için bu kontrolden tamamen muaf
+    # kalıyor ve alakasız olsa bile geçerli bir sütun sanılıyordu (gerçek
+    # pilot testte yakalandı: Claude.ai'de sağ üstteki yalnız bir ikon, asıl
+    # içerikten 500px+ uzakta olmasına rağmen sahte bir "sütun" oluşturdu).
+    if len(x_bands) >= 2:
         band_y_ranges = [
-            (b, min(n.bbox[1] for n in b["nodes"]), max(n.bbox[3] for n in b["nodes"]))
-            for b in primary_bands
+            (min(n.bbox[1] for n in b["nodes"]), max(n.bbox[3] for n in b["nodes"]))
+            for b in x_bands
         ]
-        widest_band, widest_y1, widest_y2 = max(
-            band_y_ranges, key=lambda t: t[0]["range"][1] - t[0]["range"][0]
-        )
-        others = [(y1, y2) for b, y1, y2 in band_y_ranges if b is not widest_band]
-        others_y1 = min(y1 for y1, _ in others)
-        others_y2 = max(y2 for _, y2 in others)
-
-        inter = max(0.0, min(widest_y2, others_y2) - max(widest_y1, others_y1))
-        shorter = min(widest_y2 - widest_y1, others_y2 - others_y1)
-        containment_ratio = inter / shorter if shorter > 0 else 0.0
-        if containment_ratio < DEFAULT_MIN_COLUMN_Y_OVERLAP:
-            return False
+        for i in range(len(band_y_ranges)):
+            y1_a, y2_a = band_y_ranges[i]
+            for y1_b, y2_b in band_y_ranges[i + 1 :]:
+                inter = max(0.0, min(y2_a, y2_b) - max(y1_a, y1_b))
+                shorter = min(y2_a - y1_a, y2_b - y1_b)
+                containment_ratio = inter / shorter if shorter > 0 else 0.0
+                if containment_ratio < DEFAULT_MIN_COLUMN_Y_OVERLAP:
+                    return False
 
     return True
+
+
+DEFAULT_GAP_SPLIT_MIN_RATIO = 0.03
+# Ebeveyn genişliğine oranla, dikey "seam" (boş şerit) en az bu kadar geniş
+# olmalı — küçük satır-içi boşluklar (ör. buton aralıkları) yanlışlıkla
+# sütun ayrımı sayılmasın.
+DEFAULT_GAP_SPLIT_MIN_HEIGHT_RATIO = 0.3
+# Seam'in HER İKİ tarafındaki grup da ebeveyn yüksekliğinin en az bu kadarını
+# kaplamalı — bu, "tek bir satırdaki elemanlar arasında tesadüfen büyük bir
+# boşluk var" durumunu (ki bunlar sütun değil, aynı satırın parçalarıdır)
+# gerçek dikey sütun ayrımından ayırt eder.
+DEFAULT_GAP_SPLIT_MIN_CONTENT_HEIGHT_RATIO = 0.5
+# Tüm çocukların BİRLEŞİK dikey kapsamı, ebeveyn yüksekliğinin en az bu
+# kadarını doldurmalı — aksi halde içerik zaten tek bir satır/bant demektir,
+# X'teki boşluklar satır-içi boşluklardır, sütun seam'i değil.
+
+
+def _find_vertical_seam_split(
+    children: list[Node], parent_bbox: list[float]
+) -> tuple[list[Node], list[Node]] | None:
+    """Çocukları sol kenara göre sıralayıp aralarındaki EN BÜYÜK boş X
+    şeridini ("seam") bulur — hiçbir elemanın bu şeridi kesmediği garantisiyle
+    (running-max-right / skyline taraması). Bulunursa, seam'in solundaki ve
+    sağındaki gruplar (her biri kendi iç yapısına bakılmaksızın) döner.
+
+    Neden gerekli: X-ekseni interval kümeleme (_cluster_by_axis), gerçek bir
+    sidebar'ı (kendi içinde farklı alt-X-aralıklarına sahip elemanlardan
+    oluşabilir — başlık, liste, alt ikon satırı gibi, bunlar birbiriyle
+    yeterince X-örtüşmediği için TEK bir banda düşmüyor) yakalayamıyor; aynı
+    şekilde "ana içerik" tarafındaki dağınık küçük elemanları (buton, kart —
+    farklı X aralıklarında) da tek bir bant halinde birleştiremiyor, bunun
+    yerine hepsini N ayrı (çoğu sahte) banda bölüyor. Gerçek pilot testte
+    (YouTube ana sayfası) bu N-parçalı yapı N ayrı sahte "sütuna"
+    dönüşüyordu — bkz. _column_split_indicated'ın pairwise Y-örtüşme
+    kontrolü bunu artık reddediyor, ama bu da sidebar'ın kendisinin bir sütun
+    olarak tanınmasını engelliyordu (ya hep ya hiç). Boşluk-tabanlı tek-seam
+    tespiti bunun yerine "insan gözünün gördüğü" TEK boşluğu arar — sidebar'ın
+    bittiği, ana içeriğin başladığı YER; elemanların kendi aralarında nasıl
+    kümelendiği önemli değil, sadece o TEK boşluğun solunda mı sağında mı
+    oldukları önemli.
+    """
+    if len(children) < 2:
+        return None
+
+    parent_width = parent_bbox[2] - parent_bbox[0]
+    parent_height = parent_bbox[3] - parent_bbox[1]
+    if parent_width <= 0 or parent_height <= 0:
+        return None
+
+    content_y1 = min(n.bbox[1] for n in children)
+    content_y2 = max(n.bbox[3] for n in children)
+    if (content_y2 - content_y1) / parent_height < DEFAULT_GAP_SPLIT_MIN_CONTENT_HEIGHT_RATIO:
+        return None
+
+    ordered = sorted(children, key=lambda n: n.bbox[0])
+    running_max_right = ordered[0].bbox[2]
+    best_gap = 0.0
+    best_idx = None
+    for i in range(1, len(ordered)):
+        gap = ordered[i].bbox[0] - running_max_right
+        if gap > best_gap:
+            best_gap = gap
+            best_idx = i
+        running_max_right = max(running_max_right, ordered[i].bbox[2])
+
+    if best_idx is None or best_gap < parent_width * DEFAULT_GAP_SPLIT_MIN_RATIO:
+        return None
+
+    left, right = ordered[:best_idx], ordered[best_idx:]
+
+    left_height = max(n.bbox[3] for n in left) - min(n.bbox[1] for n in left)
+    right_height = max(n.bbox[3] for n in right) - min(n.bbox[1] for n in right)
+    if left_height / parent_height < DEFAULT_GAP_SPLIT_MIN_HEIGHT_RATIO:
+        return None
+    if right_height / parent_height < DEFAULT_GAP_SPLIT_MIN_HEIGHT_RATIO:
+        return None
+
+    return left, right
+
+
+def _build_gap_split(
+    left: list[Node],
+    right: list[Node],
+    parent_bbox: list[float],
+    *,
+    next_id: Callable[[], str],
+    overlap_threshold: float,
+) -> tuple[list[Node], dict]:
+    """Boşluk-tabanlı tek-seam split'in iki tarafını, her biri KENDİ iç
+    düzenini bulmak üzere recursive olarak infer_layout_for_children'a geri
+    göndererek bir flex-row'a sarar."""
+    new_children: list[Node] = []
+    for group in (left, right):
+        if len(group) == 1:
+            new_children.append(group[0])
+            continue
+        group_bbox = union_bbox([n.bbox for n in group])
+        sub_children, sub_layout = infer_layout_for_children(
+            group, group_bbox, next_id=next_id, overlap_threshold=overlap_threshold
+        )
+        wrapper = Node(id=next_id(), label=None, bbox=group_bbox, children=sub_children, synthetic=True)
+        wrapper.layout = sub_layout
+        new_children.append(wrapper)
+
+    layout = _build_axis_layout(new_children, parent_bbox, direction="row")
+    return new_children, layout
 
 
 def _build_column_split(
@@ -280,6 +394,10 @@ def infer_layout_for_children(
     """
     if len(children) <= 1:
         return children, None
+
+    seam_split = _find_vertical_seam_split(children, parent_bbox)
+    if seam_split is not None:
+        return _build_gap_split(*seam_split, parent_bbox, next_id=next_id, overlap_threshold=overlap_threshold)
 
     x_bands = _cluster_by_axis(children, x_range, overlap_threshold)
     if _column_split_indicated(x_bands, len(children), parent_bbox):
