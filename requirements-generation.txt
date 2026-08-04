@@ -1,4 +1,7 @@
-# Aşama 4 (Generation) artık yerel bir model değil, Gemini API kullanıyor
+# Aşama 4 (Generation) artık yerel bir model değil, bir API kullanıyor
 # (bkz. src/generation/model.py) — bu yüzden torch/accelerate/bitsandbytes
-# burada gerekmiyor. GEMINI_API_KEY ortam değişkeninin ayarlı olması yeterli.
+# burada gerekmiyor. Ana sağlayıcı Claude (ANTHROPIC_API_KEY ortam
+# değişkeni); Gemini entegrasyonu kodda duruyor ama aktif değil (google-genai
+# yine de kurulu tutuluyor, gerekirse hızlıca geri dönülebilsin diye).
+anthropic
 google-genai
