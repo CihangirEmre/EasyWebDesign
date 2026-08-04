@@ -15,7 +15,7 @@ from .tiling import (
 )
 
 
-def run_grounding(model, processor, image: Image.Image, *, prompt: str = GROUNDING_PROMPT, max_new_tokens: int = 2048) -> str:
+def run_grounding(model, processor, image: Image.Image, *, prompt: str = GROUNDING_PROMPT, max_new_tokens: int = 4096) -> str:
     """Modeli tek bir görsel/tile üzerinde çalıştırır, ham metin çıktısını döner."""
     messages = [
         {
@@ -43,7 +43,7 @@ def run_grounding_with_tiling(
     processor,
     image: Image.Image,
     *,
-    max_new_tokens: int = 2048,
+    max_new_tokens: int = 4096,
     max_tile_height_ratio: float = DEFAULT_MAX_TILE_HEIGHT_RATIO,
     overlap_px: int = DEFAULT_OVERLAP_PX,
 ) -> tuple[list[dict], str]:

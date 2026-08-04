@@ -47,7 +47,7 @@ def process_images(
     source: str | Path | list[str],
     output_dir: str | Path = "grounding_results",
     *,
-    max_new_tokens: int = 2048,
+    max_new_tokens: int = 4096,
     use_tiling: bool = False,
     max_tile_height_ratio: float = DEFAULT_MAX_TILE_HEIGHT_RATIO,
     overlap_px: int = DEFAULT_OVERLAP_PX,
@@ -94,7 +94,7 @@ def main() -> None:
     parser.add_argument("--source", type=str, required=True, help="Görsel dosyası veya klasörü")
     parser.add_argument("--output-dir", type=str, default="grounding_results")
     parser.add_argument("--model-id", type=str, default=DEFAULT_MODEL_ID)
-    parser.add_argument("--max-new-tokens", type=int, default=2048)
+    parser.add_argument("--max-new-tokens", type=int, default=4096)
     parser.add_argument(
         "--use-tiling", action="store_true",
         help="Tiling'i aç (varsayılan kapalı — artık tek bir kaba bölge seti tespit "
