@@ -1,9 +1,4 @@
-# transformers buraya dahil değil: Aşama 4 artık Qwen2.5-VL-7B kullanıyor
-# (bkz. src/generation/model.py) ve Aşama 1'in Qwen3-VL'i gibi bleeding-edge
-# transformers desteğine ihtiyaç duyuyor; bunu requirements-grounding.txt
-# GitHub'dan kuruyor. Bu dosya stable sürüme downgrade edip o desteği
-# kırmasın diye tekrar etmiyoruz. Aynı ortamda ikisi birlikte kurulacaksa
-# requirements-grounding.txt SONRA kurulmalı (bkz. scripts/setup_colab.sh).
-accelerate
-bitsandbytes
-torch
+# Aşama 4 (Generation) artık yerel bir model değil, Gemini API kullanıyor
+# (bkz. src/generation/model.py) — bu yüzden torch/accelerate/bitsandbytes
+# burada gerekmiyor. GEMINI_API_KEY ortam değişkeninin ayarlı olması yeterli.
+google-genai

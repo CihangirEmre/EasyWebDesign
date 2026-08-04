@@ -11,8 +11,13 @@ alt-fonksiyon içinde import edilir; bu sayede bu dosya, o bağımlılıklar kur
 olmasa bile (ör. yerel geliştirme ortamında) import edilip CLI argümanları
 test edilebilir.
 
+Aşama 4 (Generation) artık Gemini API kullanıyor (bkz. src/generation/model.py)
+— GEMINI_API_KEY ortam değişkeninin ayarlı olması gerekir, yerel GPU/model
+indirmesi gerekmez.
+
 Colab kullanımı:
     !bash scripts/setup_colab.sh
+    import os; os.environ["GEMINI_API_KEY"] = "..."
     !python -m src.pipeline --urls-file urls.txt --images photo1.png photo2.png \
         --output-dir /content/drive/MyDrive/pipeline_output
 """
@@ -103,18 +108,12 @@ def _run_grounding(normalized_dir: Path, stage1_dir: Path, *, model_id: str, loa
         _empty_cuda_cache()
 
 
-def _run_generation(
-    stage2b_dir: Path, images_dir: Path, stage4_dir: Path, *, model_id: str, load_in_4bit: bool
-) -> None:
+def _run_generation(stage2b_dir: Path, images_dir: Path, stage4_dir: Path, *, model_id: str) -> None:
     from src.generation.model import load_generation_model
     from src.generation.pipeline import run as run_generation
 
-    model, processor = load_generation_model(model_id, load_in_4bit=load_in_4bit)
-    try:
-        run_generation(stage2b_dir, images_dir, stage4_dir, model, processor)
-    finally:
-        del model, processor
-        _empty_cuda_cache()
+    client, model_id = load_generation_model(model_id)
+    run_generation(stage2b_dir, images_dir, stage4_dir, client, model_id)
 
 
 def _assemble_final(stage3_dir: Path, stage4_dir: Path, final_dir: Path) -> None:
@@ -138,7 +137,7 @@ def run_full_pipeline(
     images: list[str] | None = None,
     output_dir: str | Path = "pipeline_output",
     grounding_model_id: str = "Qwen/Qwen3-VL-8B-Instruct",
-    generation_model_id: str = "Qwen/Qwen2.5-VL-7B-Instruct",
+    generation_model_id: str = "gemini-2.5-flash",
     load_in_4bit: bool = False,
     viewport_width: int = 1280,
     viewport_height: int = 800,
@@ -178,10 +177,10 @@ def run_full_pipeline(
 
     run_assets(output_dir / "stage2b", normalized_dir, output_dir / "stage3")
 
-    print("== Aşama 4: Generation (Qwen2.5-VL-7B, bölge bazlı) ==")
+    print("== Aşama 4: Generation (Gemini, bölge bazlı) ==")
     _run_generation(
         output_dir / "stage2b", normalized_dir, output_dir / "stage4",
-        model_id=generation_model_id, load_in_4bit=load_in_4bit,
+        model_id=generation_model_id,
     )
 
     print("== Son montaj ==")
@@ -197,7 +196,7 @@ def main() -> None:
     parser.add_argument("--images", type=str, nargs="+", default=None, help="Görsel dosyası/dosyaları veya klasör")
     parser.add_argument("--output-dir", type=str, default="pipeline_output")
     parser.add_argument("--grounding-model-id", type=str, default="Qwen/Qwen3-VL-8B-Instruct")
-    parser.add_argument("--generation-model-id", type=str, default="Qwen/Qwen2.5-VL-7B-Instruct")
+    parser.add_argument("--generation-model-id", type=str, default="gemini-2.5-flash")
     parser.add_argument("--load-in-4bit", action="store_true")
     parser.add_argument("--viewport-width", type=int, default=1280)
     parser.add_argument("--viewport-height", type=int, default=800)

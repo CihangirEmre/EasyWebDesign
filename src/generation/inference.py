@@ -1,4 +1,8 @@
-"""Aşama 4 — Generation: model çalıştırma (bölge bazlı, görsel + JSON girdili)."""
+"""Aşama 4 — Generation: model çalıştırma (bölge bazlı, görsel + JSON girdili).
+
+Gemini API (google-genai SDK) kullanıyor — bkz. src/generation/model.py'deki
+karar güncellemesi (Qwen2.5-VL-7B yerine).
+"""
 
 from __future__ import annotations
 
@@ -8,27 +12,18 @@ from .prompts import GENERATION_SYSTEM_PROMPT, build_region_prompt
 
 
 def run_region_generation(
-    model, processor, image: Image.Image, region_json: str, *, max_new_tokens: int = 2048
+    client, model_id: str, image: Image.Image, region_json: str, *, max_new_tokens: int = 2048
 ) -> str:
     """Tek bir bölge (root'un bir çocuğu) için, kırpılmış görüntü + JSON
     alt-ağacı birlikte verip HTML fragment'ı üretir."""
-    messages = [
-        {"role": "system", "content": GENERATION_SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": [
-                {"type": "image", "image": image},
-                {"type": "text", "text": build_region_prompt(region_json)},
-            ],
-        },
-    ]
-    inputs = processor.apply_chat_template(
-        messages,
-        tokenize=True,
-        add_generation_prompt=True,
-        return_dict=True,
-        return_tensors="pt",
-    ).to(model.device)
+    from google.genai import types
 
-    output = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
-    return processor.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
+    response = client.models.generate_content(
+        model=model_id,
+        contents=[image, build_region_prompt(region_json)],
+        config=types.GenerateContentConfig(
+            system_instruction=GENERATION_SYSTEM_PROMPT,
+            max_output_tokens=max_new_tokens,
+        ),
+    )
+    return response.text or ""

@@ -14,6 +14,9 @@ kopyalamaz, sadece HTML üretir — asset'ler ayrı pipeline'dan geliyor).
 Kullanım:
     python -m src.generation.pipeline --formatted-dir formatting_results \
         --images-dir data/train/normalized --output-dir generation_results
+
+Gemini API kullanır (bkz. src/generation/model.py) — GEMINI_API_KEY ortam
+değişkeninin ayarlı olması gerekir.
 """
 
 from __future__ import annotations
@@ -36,10 +39,10 @@ def run(
     formatted_dir: str | Path,
     images_dir: str | Path,
     output_dir: str | Path,
-    model,
-    processor,
+    client,
+    model_id: str,
     *,
-    max_new_tokens: int = 2048,
+    max_new_tokens: int = 4096,
 ) -> None:
     formatted_dir = Path(formatted_dir)
     images_dir = Path(images_dir)
@@ -68,7 +71,7 @@ def run(
             crop = image.crop((x1, y1, x2, y2))
             region_json = json.dumps(region, ensure_ascii=False)
 
-            raw_text = run_region_generation(model, processor, crop, region_json, max_new_tokens=max_new_tokens)
+            raw_text = run_region_generation(client, model_id, crop, region_json, max_new_tokens=max_new_tokens)
             raw_texts.append(raw_text)
             region_htmls.append(extract_html(raw_text))
 
@@ -82,18 +85,17 @@ def run(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Aşama 4 — Generation (Qwen2.5-VL-7B, bölge bazlı)")
+    parser = argparse.ArgumentParser(description="Aşama 4 — Generation (Gemini, bölge bazlı)")
     parser.add_argument("--formatted-dir", type=str, required=True)
     parser.add_argument("--images-dir", type=str, required=True)
     parser.add_argument("--output-dir", type=str, default="generation_results")
     parser.add_argument("--model-id", type=str, default=DEFAULT_MODEL_ID)
     parser.add_argument("--max-new-tokens", type=int, default=2048)
-    parser.add_argument("--load-in-4bit", action="store_true")
     args = parser.parse_args()
 
-    model, processor = load_generation_model(args.model_id, load_in_4bit=args.load_in_4bit)
+    client, model_id = load_generation_model(args.model_id)
     run(
-        args.formatted_dir, args.images_dir, args.output_dir, model, processor,
+        args.formatted_dir, args.images_dir, args.output_dir, client, model_id,
         max_new_tokens=args.max_new_tokens,
     )
 

@@ -1,43 +1,30 @@
-"""Aşama 4 — Generation: Qwen2.5-VL-7B yükleme.
+"""Aşama 4 — Generation: Gemini API istemcisi.
 
-Karar güncellemesi (bkz. CLAUDE.md §2, Aşama 4): ScreenCoder (arXiv:2507.22827)
-karşılaştırması sonrası saf metin-tabanlı Qwen2.5-Coder-7B yerine Qwen2.5-VL-7B'ye
-geçildi. Gerekçe: metin-only model, JSON şemasındaki kuralları (id, inline
-layout, vb.) harfiyen uygulamayı tamamen prompt talimatına güveniyordu — bu bir
-garanti değil, ve gerçek üretimlerde model bu kuralları sessizce atlayabildi
-(bkz. src/generation/repair.py). VLM, JSON'un yanında bölgenin kırpılmış
-görüntüsünü de görerek JSON'da belirsiz/eksik kalan noktaları görsel olarak
-doğrulayabiliyor — ScreenCoder'ın modüler mimarisinin asıl kazancı bu.
+Karar güncellemesi (bkz. CLAUDE.md §2, Aşama 4): Qwen2.5-VL-7B (yerel, Colab
+GPU'sunda çalışan açık model) yerine Gemini API'ye geçildi. Gerekçe: bu
+oturumda tekrarlayan generation bug'larının (geçersiz CSS property adı,
+content'in attribute'a gömülmesi, iç içe <html> sarmalayıcı vb.) hepsi aynı
+kök soruna işaret ediyordu — 7B'lik açık modelin talimatlara güvenilir
+uymaması. Kapalı, daha güçlü bir model (Gemini) bu güvenilirlik sorununu
+azaltıp azaltmadığını test etmek için değiştirildi.
+
+API key GEMINI_API_KEY ortam değişkeninden okunur — google-genai SDK'sı
+bunu otomatik yapar, key kodun hiçbir yerinde metin olarak geçmez.
 """
 
 from __future__ import annotations
 
-from transformers import AutoModelForImageTextToText, AutoProcessor
+from google import genai
 
-DEFAULT_MODEL_ID = "Qwen/Qwen2.5-VL-7B-Instruct"
+DEFAULT_MODEL_ID = "gemini-2.5-flash"
 
 
-def load_generation_model(model_id: str = DEFAULT_MODEL_ID, *, load_in_4bit: bool = False):
-    """Qwen2.5-VL modelini ve processor'ını yükler.
+def load_generation_model(model_id: str = DEFAULT_MODEL_ID):
+    """Gemini istemcisini döner.
 
-    load_in_4bit=True: VRAM kısıtlı ortamlar için bitsandbytes 4-bit
-    quantization (A100 40GB'de 7B model için genelde gerekmez).
+    Diğer aşamalardaki (model, processor) çiftiyle arayüz tutarlılığı için
+    (client, model_id) döner — ikinci eleman burada bir processor değil,
+    her çağrıda hangi Gemini modelinin kullanılacağını taşıyan string'dir.
     """
-    quantization_config = None
-    if load_in_4bit:
-        from transformers import BitsAndBytesConfig
-
-        quantization_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype="bfloat16",
-        )
-
-    model = AutoModelForImageTextToText.from_pretrained(
-        model_id,
-        dtype="auto",
-        device_map="auto",
-        quantization_config=quantization_config,
-    )
-    processor = AutoProcessor.from_pretrained(model_id)
-    return model, processor
+    client = genai.Client()
+    return client, model_id
