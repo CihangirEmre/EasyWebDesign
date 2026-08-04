@@ -1,0 +1,203 @@
+{
+  "$schema": "ui-to-code-formatting-schema-v1",
+  "meta": {
+    "source_image": "upload_0002.png",
+    "canvas": {
+      "width": 1280,
+      "height": 704
+    },
+    "viewport_type": "full_page"
+  },
+  "root": {
+    "id": "n0",
+    "tag": "body",
+    "layout": {
+      "display": "flex",
+      "direction": "column",
+      "justify": "flex-start",
+      "align": "flex-start",
+      "gap": 40
+    },
+    "bbox": [
+      0,
+      0,
+      1280,
+      704
+    ],
+    "style": {
+      "bg_color": "#ffddee"
+    },
+    "children": [
+      {
+        "id": "n1",
+        "tag": "div",
+        "layout": {
+          "display": "flex",
+          "direction": "row",
+          "justify": "space-between",
+          "align": "stretch",
+          "gap": 413
+        },
+        "bbox": [
+          0,
+          0,
+          716,
+          39
+        ],
+        "children": [
+          {
+            "id": "n2",
+            "tag": "button",
+            "bbox": [
+              0,
+              0,
+              35,
+              30
+            ],
+            "style": {
+              "bg_color": "#ffddee"
+            },
+            "asset_ref": "assets/n2_button.png",
+            "content": "←"
+          },
+          {
+            "id": "n3",
+            "tag": "h3",
+            "bbox": [
+              563,
+              0,
+              716,
+              39
+            ],
+            "style": {
+              "bg_color": "#ffddee"
+            },
+            "asset_ref": "assets/n3_h3.png",
+            "content": "贾斯纳的猫"
+          }
+        ]
+      },
+      {
+        "id": "n4",
+        "tag": "button",
+        "bbox": [
+          1079,
+          0,
+          1280,
+          190
+        ],
+        "style": {
+          "bg_color": "#ffddee"
+        },
+        "content": "Fork me on GitHub",
+        "children": [
+          {
+            "id": "n5",
+            "tag": "button",
+            "bbox": [
+              1245,
+              0,
+              1280,
+              30
+            ],
+            "style": {
+              "bg_color": "#ffddee"
+            },
+            "asset_ref": "assets/n5_button.png",
+            "content": "→"
+          }
+        ]
+      },
+      {
+        "id": "n6",
+        "tag": "h3",
+        "bbox": [
+          608,
+          61,
+          671,
+          76
+        ],
+        "style": {
+          "bg_color": "#ffddee"
+        },
+        "asset_ref": "assets/n6_h3.png",
+        "content": "游戏介绍:"
+      },
+      {
+        "id": "n7",
+        "tag": "p",
+        "bbox": [
+          191,
+          96,
+          1088,
+          116
+        ],
+        "style": {
+          "bg_color": "#ffddee"
+        },
+        "asset_ref": "assets/n7_p.png",
+        "content": "适于儿童玩的逻辑游戏。 警告：游戏会大声朗读题目（因为小孩子有可能看不懂问题描述），所以请检查你的设备音量。 选择一个关卡"
+      },
+      {
+        "id": "n8",
+        "tag": "li",
+        "bbox": [
+          599,
+          149,
+          680,
+          167
+        ],
+        "style": {
+          "bg_color": "#ffeef8"
+        },
+        "asset_ref": "assets/n8_li.png",
+        "content": "0. 初出茅庐"
+      },
+      {
+        "id": "n9",
+        "tag": "li",
+        "bbox": [
+          599,
+          195,
+          680,
+          213
+        ],
+        "style": {
+          "bg_color": "#ffeef8"
+        },
+        "asset_ref": "assets/n9_li.png",
+        "content": "1. 小试牛刀"
+      },
+      {
+        "id": "n10",
+        "tag": "li",
+        "bbox": [
+          599,
+          241,
+          680,
+          258
+        ],
+        "style": {
+          "bg_color": "#ffeef8"
+        },
+        "asset_ref": "assets/n10_li.png",
+        "content": "2. 靳露头角"
+      },
+      {
+        "id": "n11",
+        "tag": "li",
+        "bbox": [
+          599,
+          287,
+          680,
+          304
+        ],
+        "style": {
+          "bg_color": "#ffeef8"
+        },
+        "asset_ref": "assets/n11_li.png",
+        "content": "3. 得心应手"
+      }
+    ]
+  }
+}

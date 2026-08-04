@@ -1,0 +1,150 @@
+{
+  "id": "root",
+  "bbox_2d": [
+    0.0,
+    0.0,
+    1000.0,
+    1000.0
+  ],
+  "label": "body",
+  "layout": {
+    "display": "flex",
+    "direction": "column",
+    "justify": "flex-start",
+    "align": "flex-start",
+    "gap": 40
+  },
+  "children": [
+    {
+      "id": "wrap0",
+      "bbox_2d": [
+        0,
+        0,
+        559,
+        55
+      ],
+      "synthetic": true,
+      "layout": {
+        "display": "flex",
+        "direction": "row",
+        "justify": "space-between",
+        "align": "stretch",
+        "gap": 413
+      },
+      "children": [
+        {
+          "id": "g0",
+          "bbox_2d": [
+            0,
+            0,
+            27,
+            43
+          ],
+          "label": "button",
+          "text": "←"
+        },
+        {
+          "id": "g3",
+          "bbox_2d": [
+            440,
+            0,
+            559,
+            55
+          ],
+          "label": "heading",
+          "text": "贾斯纳的猫"
+        }
+      ]
+    },
+    {
+      "id": "g2",
+      "bbox_2d": [
+        843,
+        0,
+        1000,
+        270
+      ],
+      "label": "button",
+      "text": "Fork me on GitHub",
+      "children": [
+        {
+          "id": "g1",
+          "bbox_2d": [
+            973,
+            0,
+            1000,
+            43
+          ],
+          "label": "button",
+          "text": "→"
+        }
+      ]
+    },
+    {
+      "id": "g4",
+      "bbox_2d": [
+        475,
+        86,
+        524,
+        108
+      ],
+      "label": "heading",
+      "text": "游戏介绍:"
+    },
+    {
+      "id": "g5",
+      "bbox_2d": [
+        149,
+        137,
+        850,
+        165
+      ],
+      "label": "paragraph",
+      "text": "适于儿童玩的逻辑游戏。 警告：游戏会大声朗读题目（因为小孩子有可能看不懂问题描述），所以请检查你的设备音量。 选择一个关卡"
+    },
+    {
+      "id": "g6",
+      "bbox_2d": [
+        468,
+        212,
+        531,
+        237
+      ],
+      "label": "list item",
+      "text": "0. 初出茅庐"
+    },
+    {
+      "id": "g7",
+      "bbox_2d": [
+        468,
+        277,
+        531,
+        302
+      ],
+      "label": "list item",
+      "text": "1. 小试牛刀"
+    },
+    {
+      "id": "g8",
+      "bbox_2d": [
+        468,
+        342,
+        531,
+        367
+      ],
+      "label": "list item",
+      "text": "2. 靳露头角"
+    },
+    {
+      "id": "g9",
+      "bbox_2d": [
+        468,
+        407,
+        531,
+        432
+      ],
+      "label": "list item",
+      "text": "3. 得心应手"
+    }
+  ]
+}

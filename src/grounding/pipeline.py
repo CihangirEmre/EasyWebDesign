@@ -48,7 +48,7 @@ def process_images(
     output_dir: str | Path = "grounding_results",
     *,
     max_new_tokens: int = 2048,
-    use_tiling: bool = True,
+    use_tiling: bool = False,
     max_tile_height_ratio: float = DEFAULT_MAX_TILE_HEIGHT_RATIO,
     overlap_px: int = DEFAULT_OVERLAP_PX,
 ) -> list[dict]:
@@ -95,7 +95,12 @@ def main() -> None:
     parser.add_argument("--output-dir", type=str, default="grounding_results")
     parser.add_argument("--model-id", type=str, default=DEFAULT_MODEL_ID)
     parser.add_argument("--max-new-tokens", type=int, default=2048)
-    parser.add_argument("--no-tiling", action="store_true", help="Tiling'i kapat")
+    parser.add_argument(
+        "--use-tiling", action="store_true",
+        help="Tiling'i aç (varsayılan kapalı — artık tek bir kaba bölge seti tespit "
+             "edildiği için tile'lara bölmek riskli: her tile kendi 'main_content'ını "
+             "üretebilir).",
+    )
     parser.add_argument("--max-tile-height-ratio", type=float, default=DEFAULT_MAX_TILE_HEIGHT_RATIO)
     parser.add_argument("--overlap-px", type=int, default=DEFAULT_OVERLAP_PX)
     parser.add_argument("--load-in-4bit", action="store_true")
@@ -106,7 +111,7 @@ def main() -> None:
     results = process_images(
         model, processor, args.source, args.output_dir,
         max_new_tokens=args.max_new_tokens,
-        use_tiling=not args.no_tiling,
+        use_tiling=args.use_tiling,
         max_tile_height_ratio=args.max_tile_height_ratio,
         overlap_px=args.overlap_px,
     )

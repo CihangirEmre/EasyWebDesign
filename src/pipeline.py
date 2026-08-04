@@ -1,20 +1,24 @@
-"""Master orkestratör — Aşama 0'dan Aşama 4'e kadar tüm pipeline'ı zincirler.
+"""Master orkestratör — ScreenCoder-tarzı basit mimari (bkz. CLAUDE.md §2).
 
-Girdi olarak URL listesi VE/VEYA doğrudan görsel dosyası/klasörü kabul eder
-(hedef: projenin sonunda ikisinin de desteklenmesi). URL verilirse Aşama 0
-(Playwright screenshot) çalışır; doğrudan görsel verilirse yakalama adımı
-atlanır ama Qwen3-VL boyut kısıtı için normalize adımı YİNE uygulanır — Aşama
-0'ın normalize kararı girdi kaynağından bağımsız geçerlidir.
+KARAR GÜNCELLEMESİ: Eski Aşama 2a (Planning/kural-tabanlı hiyerarşi) ve Aşama 2b
+(Formatting/zengin JSON şema) tamamen kaldırıldı. Yeni akış 4 aşamalı:
+
+    0. Preprocessing   (değişmedi — Playwright + normalize)
+    1. Grounding       (Qwen3-VL, artık SADECE kaba sidebar/header/navigation/
+                        main_content bbox'larını tespit ediyor)
+    2. Regions         (containment-resolve — model yok, kural-tabanlı)
+    3. Generation      (Claude, her region kendi kırpılmış görseli + doğal dil
+                        talimatıyla; main_content'teki gerçek fotoğraflar
+                        `.img-placeholder` olarak işaretleniyor)
+    4. Görsel Yerleştirme (Playwright render + placeholder bbox'ını orijinal
+                        screenshot'a ölçekleyip crop — UIED/eşleme YOK)
+
+Girdi olarak URL listesi VE/VEYA doğrudan görsel dosyası/klasörü kabul eder.
+URL verilirse Aşama 0 (Playwright screenshot) çalışır; doğrudan görsel
+verilirse yakalama adımı atlanır ama normalize adımı YİNE uygulanır.
 
 Ağır bağımlılıklar (playwright/transformers/torch) yalnızca ihtiyaç duyulan
-alt-fonksiyon içinde import edilir; bu sayede bu dosya, o bağımlılıklar kurulu
-olmasa bile (ör. yerel geliştirme ortamında) import edilip CLI argümanları
-test edilebilir.
-
-Aşama 4 (Generation) artık Claude API kullanıyor (bkz. src/generation/model.py
-— Gemini 503 hatası verdiği için değiştirildi, Gemini entegrasyonu kodda
-duruyor ama aktif değil) — ANTHROPIC_API_KEY ortam değişkeninin ayarlı olması
-gerekir, yerel GPU/model indirmesi gerekmez.
+alt-fonksiyon içinde import edilir.
 
 Colab kullanımı:
     !bash scripts/setup_colab.sh
@@ -26,7 +30,6 @@ Colab kullanımı:
 from __future__ import annotations
 
 import argparse
-import shutil
 from pathlib import Path
 
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg")
@@ -98,38 +101,38 @@ def _prepare_stage0(
 
 
 def _run_grounding(normalized_dir: Path, stage1_dir: Path, *, model_id: str, load_in_4bit: bool) -> None:
+    """Kaba sidebar/header/navigation/main_content bbox tespiti (bkz.
+    src/grounding/prompts.py'deki güncellenmiş GROUNDING_PROMPT). Tiling
+    kapalı — tek bir kaba bölge seti için tile'lara bölmenin getirisi yok."""
     from src.grounding.model import load_grounding_model
     from src.grounding.pipeline import process_images
 
     model, processor = load_grounding_model(model_id, load_in_4bit=load_in_4bit)
     try:
-        process_images(model, processor, normalized_dir, stage1_dir)
+        process_images(model, processor, normalized_dir, stage1_dir, use_tiling=False)
     finally:
         del model, processor
         _empty_cuda_cache()
 
 
-def _run_generation(stage2b_dir: Path, images_dir: Path, stage4_dir: Path, *, model_id: str) -> None:
+def _run_regions(stage1_dir: Path, normalized_dir: Path, stage2_dir: Path) -> None:
+    from src.regions.pipeline import run as run_regions
+
+    run_regions(stage1_dir, normalized_dir, stage2_dir)
+
+
+def _run_generation(stage2_dir: Path, normalized_dir: Path, stage3_dir: Path, *, model_id: str) -> None:
     from src.generation.model import load_generation_model
     from src.generation.pipeline import run as run_generation
 
     client, model_id = load_generation_model(model_id)
-    run_generation(stage2b_dir, images_dir, stage4_dir, client, model_id)
+    run_generation(stage2_dir, normalized_dir, stage3_dir, client, model_id)
 
 
-def _assemble_final(stage3_dir: Path, stage4_dir: Path, final_dir: Path) -> None:
-    """Her görsel için üretilen HTML'i, kırpılmış asset'leriyle birlikte
-    doğrudan açılabilir tek bir klasörde toplar."""
-    final_dir.mkdir(parents=True, exist_ok=True)
-    for html_path in sorted(stage4_dir.glob("*.html")):
-        stem = html_path.stem
-        target_dir = final_dir / stem
-        target_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy(html_path, target_dir / "index.html")
+def _run_placeholder_replace(stage3_dir: Path, normalized_dir: Path, final_dir: Path) -> None:
+    from src.assets.pipeline import run as run_assets
 
-        assets_src = stage3_dir / stem / "assets"
-        if assets_src.exists():
-            shutil.copytree(assets_src, target_dir / "assets", dirs_exist_ok=True)
+    run_assets(stage3_dir, normalized_dir, final_dir)
 
 
 def run_full_pipeline(
@@ -157,36 +160,25 @@ def run_full_pipeline(
         split_height_threshold=split_height_threshold,
     )
 
-    print("== Aşama 1: Grounding (Qwen3-VL) ==")
+    print("== Aşama 1: Grounding (Qwen3-VL, kaba bölge tespiti) ==")
     _run_grounding(
         normalized_dir, output_dir / "stage1",
         model_id=grounding_model_id, load_in_4bit=load_in_4bit,
     )
 
-    print("== Aşama 2a: Planning (kural-tabanlı) ==")
-    from src.planning.pipeline import run as run_planning
+    print("== Aşama 2: Regions (containment-resolve) ==")
+    _run_regions(output_dir / "stage1", normalized_dir, output_dir / "stage2")
 
-    run_planning(output_dir / "stage1", normalized_dir, output_dir / "stage2a")
-
-    print("== Aşama 2b: Formatting ==")
-    from src.formatting.pipeline import run as run_formatting
-
-    run_formatting(output_dir / "stage2a", normalized_dir, output_dir / "stage2b")
-
-    print("== Aşama 3: Asset Extraction ==")
-    from src.assets.pipeline import run as run_assets
-
-    run_assets(output_dir / "stage2b", normalized_dir, output_dir / "stage3")
-
-    print("== Aşama 4: Generation (Claude, bölge bazlı) ==")
+    print("== Aşama 3: Generation (Claude, region bazlı, JSON şema yok) ==")
     _run_generation(
-        output_dir / "stage2b", normalized_dir, output_dir / "stage4",
+        output_dir / "stage2", normalized_dir, output_dir / "stage3",
         model_id=generation_model_id,
     )
 
-    print("== Son montaj ==")
+    print("== Aşama 4: Görsel Yerleştirme (üretim sonrası, UIED yok) ==")
     final_dir = output_dir / "final"
-    _assemble_final(output_dir / "stage3", output_dir / "stage4", final_dir)
+    _run_placeholder_replace(output_dir / "stage3", normalized_dir, final_dir)
+
     print(f"Bitti. Çıktılar: {final_dir}")
     return final_dir
 

@@ -1,88 +1,89 @@
-"""Aşama 4 — Generation: ScreenCoder tarzı bölge bazlı prompt.
+"""Aşama 4 — Generation: ScreenCoder-tarzı basit mimari, region-tipine-özel prompt.
 
-Karar güncellemesi (bkz. CLAUDE.md §2, Aşama 4 ve src/generation/regions.py):
-sayfa tek bir dev JSON+istekle değil, root'un doğrudan çocukları (ScreenCoder'ın
-sidebar/header/nav/main content ayrımına benzer şekilde) ayrı ayrı kırpılıp
-ayrı VLM çağrılarına gönderiliyor. Modele hem o bölgenin JSON alt-ağacı hem de
-kırpılmış görüntüsü birlikte veriliyor: JSON kesin değerler (id, renk, tam
-metin, asset_ref) için referans; görüntü ise JSON'da belirsiz/eksik kalabilecek
-görsel yapı (kaç sütun, flex mi grid mi) için referans.
+KARAR GÜNCELLEMESİ (bkz. CLAUDE.md §2, Aşama 4 — ScreenCoder-tarzı pivot):
+Modele artık JSON alt-ağacı VERİLMİYOR — sadece o region'ın kırpılmış görseli
+ve region tipine (sidebar/header/navigation/main_content) özel bir doğal dil
+talimatı veriliyor. Yapı/renk/metin tamamen modelin kendi görsel yorumundan
+geliyor (ScreenCoderClone'un `html_generator.py::PROMPT_DICT`'i ile aynı
+felsefe). Gerçek fotoğraf/thumbnail'ları modelin üretim ANINDA, bilerek boş
+bir placeholder olarak işaretlemesi isteniyor (sadece main_content'te, tıpkı
+ScreenCoder'ın "images = gray block" talimatında olduğu gibi) — bu placeholder
+daha sonra src/assets/placeholders.py tarafından orijinal screenshot'tan
+gerçek bir crop ile değiştiriliyor.
+
+Tailwind/CDN KULLANILMIYOR (offline/self-contained render gerekiyor — CLIP
+score değerlendirmesi internet erişimi olmadan da çalışmalı) — düz inline CSS.
 """
 
-GENERATION_SYSTEM_PROMPT = (
-    "You are an expert front-end engineer. You are shown a cropped screenshot "
-    "of ONE section of a larger webpage, together with the structured JSON "
-    "subtree describing exactly that section. Convert this subtree into a "
-    "single valid HTML fragment (the subtree's root element plus all nested "
-    "children) with embedded inline CSS.\n\n"
+_SHARED_RULES = (
+    "You are an expert front-end engineer. You are shown a cropped screenshot of "
+    "ONE section of a larger webpage. Write a complete HTML fragment with inline "
+    "CSS that visually reproduces this section as closely as possible: layout, "
+    "spacing, colors, fonts, and all visible text (transcribed verbatim from the "
+    "image).\n\n"
     "Rules:\n"
-    "- Use the exact tag given in each node's \"tag\" field. The subtree's "
-    "root node is the outermost element of your output.\n"
-    "- Set the HTML \"id\" attribute to the node's \"id\" value on EVERY "
-    "element — this matters most for generic wrapper <div>s that have no "
-    "\"role\" to tell them apart from their siblings.\n"
-    "- CRITICAL — translate the \"layout\" object's keys into REAL CSS "
-    "property names, do NOT copy the JSON key names literally as CSS "
-    "properties (\"direction\", \"justify\", \"align\" are NOT valid CSS "
-    "properties and will be silently ignored by the browser, breaking the "
-    "layout). The mapping is exactly:\n"
-    "    layout.display   -> CSS display\n"
-    "    layout.direction -> CSS flex-direction\n"
-    "    layout.justify   -> CSS justify-content\n"
-    "    layout.align     -> CSS align-items\n"
-    "    layout.gap       -> CSS gap (append \"px\")\n"
-    "    layout.grid_cols -> CSS grid-template-columns: repeat(N, 1fr)\n"
-    "  Example: JSON layout {\"display\":\"flex\",\"direction\":\"column\","
-    "\"justify\":\"space-between\",\"align\":\"stretch\",\"gap\":12} must "
-    "become exactly style=\"display:flex;flex-direction:column;"
-    "justify-content:space-between;align-items:stretch;gap:12px\" — never "
-    "style=\"display:flex;direction:column;justify:space-between;"
-    "align:stretch;gap:12\".\n"
-    "- Also translate \"style.bg_color\" into CSS background-color, as part "
-    "of the same inline style=\"...\" attribute. Apply this to EVERY single "
-    "node that has a \"layout\" and/or \"style\" field, with NO exceptions. "
-    "Use the screenshot to resolve anything the JSON leaves ambiguous about "
-    "visual structure (e.g. exact number of visible columns, wrapping) — "
-    "the image is ground truth for visual structure, the JSON is ground "
-    "truth for exact values (ids, colors, text, asset paths).\n"
-    "- Do NOT copy any other JSON field (\"bbox\", \"layout\", \"asset_ref\", "
-    "\"content\", \"role\") onto the HTML element as a literal attribute — "
-    "these are schema fields to interpret and translate (into style, src, "
-    "background-image, or visible text as instructed elsewhere in these "
-    "rules), never to paste verbatim as HTML attributes.\n"
-    "- Also set explicit width/height as part of that inline style, computed "
-    "from the node's \"bbox\" as (bbox[2]-bbox[0]) and (bbox[3]-bbox[1]) in "
-    "pixels.\n"
-    "- NEVER use \"position: absolute\" or \"position: fixed\" anywhere, and "
-    "never use the raw \"bbox\" pixel values as left/top coordinates. All "
-    "positioning must come ONLY from normal document flow plus the "
-    "flex/grid \"layout\" rules above — absolute/fixed positioning ignores "
-    "the surrounding flex layout and causes elements to overlap or escape "
-    "their container, which has happened in past generations.\n"
-    "- Reproduce the parent-child nesting exactly as given in \"children\" — "
-    "do not flatten, reorder, or merge nodes.\n"
-    "- Output a bare HTML fragment only: do NOT include \"<!DOCTYPE>\", "
-    "\"<html>\", \"<head>\", or \"<body>\" tags, and do NOT add any <style> "
-    "block or external stylesheet link — only the subtree's own element(s) "
-    "with inline styles as instructed above.\n"
-    "- For \"img\" tags, set the src attribute to the exact \"asset_ref\" path.\n"
-    "- If a NON-\"img\" element has an \"asset_ref\" field, it represents a "
-    "real photo/thumbnail visible in the screenshot; render it via inline "
-    "style: background-image: url('<asset_ref>'); background-size: cover; "
-    "background-position: center.\n"
-    "- Use \"content\" as the element's visible TEXT NODE (innerText) where "
-    "present — e.g. <p>Abonelikler</p>, never as an attribute like "
-    "content=\"Abonelikler\" (text placed in an attribute is invisible on "
-    "the rendered page, which has happened in past generations).\n"
-    "- Non-void elements (e.g. <div>, <span>, <p>, <li>, <button>, <section>, "
-    "<a>) must always have an explicit closing tag; do NOT self-close them "
-    "with \"/>\" (only true void elements like <img> may self-close).\n"
-    "- Do NOT invent any element, section, or text that is not present in the "
-    "JSON, even if the screenshot appears to show more.\n"
+    "- Output a BARE fragment only: do NOT include \"<!DOCTYPE>\", \"<html>\", "
+    "\"<head>\", or \"<body>\" tags, and do NOT add a <style> block or any "
+    "external stylesheet/CDN link (e.g. no Tailwind CDN) — every style must be "
+    "inline via the style=\"...\" attribute, so the fragment renders correctly "
+    "with no network access.\n"
+    "- Do NOT use \"position: absolute\" or \"position: fixed\" for this "
+    "section's own top-level layout — use normal document flow plus flexbox/"
+    "grid so the section adapts to the width/height it is placed into.\n"
+    "- Non-void elements (<div>, <span>, <p>, <li>, <button>, <a>, <section>...) "
+    "must always have an explicit closing tag; never self-close them with "
+    "\"/>\" (only true void elements like <img> may self-close).\n"
+    "- Do not invent text, icons, or elements that are not visible in the "
+    "screenshot.\n"
     "- Output ONLY the HTML fragment, no explanation, inside a single ```html "
     "code block."
 )
 
+_IMAGE_PLACEHOLDER_RULE = (
+    "\n\n- IMPORTANT — for real photos, thumbnails, illustrations, or avatar "
+    "images visible in this section (NOT small icon glyphs, NOT logos, NOT "
+    "decorative shapes): do not try to draw or describe them. Instead output an "
+    "empty placeholder element in their exact place with "
+    "class=\"img-placeholder\" and inline style width/height matching that "
+    "image's own size and background-color:#cccccc — with NO text or child "
+    "content inside it whatsoever (e.g. <div class=\"img-placeholder\" "
+    "style=\"width:120px;height:80px;background-color:#cccccc;\"></div>). "
+    "Any caption/title/text that happens to overlap or sit near the image "
+    "still belongs in its own separate visible text element, not inside the "
+    "placeholder."
+)
 
-def build_region_prompt(region_json: str) -> str:
-    return f"Here is the JSON subtree for this section:\n\n{region_json}"
+REGION_PROMPTS: dict[str, str] = {
+    "sidebar": (
+        _SHARED_RULES
+        + "\n\nThis section is a SIDEBAR (a vertical panel, usually with menu "
+        "items, icons, or navigation links stacked vertically). Reproduce its "
+        "vertical arrangement, icons, and labels exactly."
+    ),
+    "header": (
+        _SHARED_RULES
+        + "\n\nThis section is a HEADER (a top banner, usually containing a "
+        "logo, title, and/or a row of controls). Reproduce the relative "
+        "positions of its elements and their text/colors exactly."
+    ),
+    "navigation": (
+        _SHARED_RULES
+        + "\n\nThis section is a NAVIGATION bar (a menu/tab bar, usually a "
+        "horizontal row of links or tabs). Reproduce the exact text of each "
+        "link/tab and their order."
+    ),
+    "main_content": (
+        _SHARED_RULES
+        + _IMAGE_PLACEHOLDER_RULE
+        + "\n\nThis section is the MAIN CONTENT area of the page — the primary "
+        "body, which may contain cards, lists, articles, forms, or other "
+        "content blocks. Reproduce its structure and all visible text exactly."
+    ),
+}
+
+
+def build_region_prompt(region_label: str) -> str:
+    """region_label: src/grounding'in döndürdüğü "sidebar"/"header"/"navigation"/
+    "main_content" etiketlerinden biri. Tanınmayan bir etiket main_content
+    kuralına (placeholder talimatı dahil, en güvenli varsayılan) düşer."""
+    return REGION_PROMPTS.get(region_label, REGION_PROMPTS["main_content"])

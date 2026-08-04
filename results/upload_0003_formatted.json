@@ -1,0 +1,93 @@
+{
+  "$schema": "ui-to-code-formatting-schema-v1",
+  "meta": {
+    "source_image": "upload_0003.png",
+    "canvas": {
+      "width": 1280,
+      "height": 704
+    },
+    "viewport_type": "full_page"
+  },
+  "root": {
+    "id": "n0",
+    "tag": "body",
+    "layout": {
+      "display": "flex",
+      "direction": "column",
+      "justify": "flex-start",
+      "align": "center",
+      "gap": 59
+    },
+    "bbox": [
+      0,
+      0,
+      1280,
+      704
+    ],
+    "style": {
+      "bg_color": "#1e4713"
+    },
+    "children": [
+      {
+        "id": "n1",
+        "tag": "p",
+        "bbox": [
+          211,
+          55,
+          1066,
+          75
+        ],
+        "style": {
+          "bg_color": "#466b24"
+        },
+        "asset_ref": "assets/n1_p.png",
+        "content": "No content is hosted on this website. This is a tool to download files from a user-provided GitHub repository URL."
+      },
+      {
+        "id": "n2",
+        "tag": "h3",
+        "bbox": [
+          325,
+          177,
+          952,
+          225
+        ],
+        "style": {
+          "bg_color": "#254f0a"
+        },
+        "asset_ref": "assets/n2_h3.png",
+        "content": "download-directory • github • io"
+      },
+      {
+        "id": "n3",
+        "tag": "input",
+        "bbox": [
+          340,
+          253,
+          937,
+          303
+        ],
+        "style": {
+          "bg_color": "#395f25"
+        },
+        "asset_ref": "assets/n3_input.png",
+        "content": "Paste GitHub.com folder URL + press Enter"
+      },
+      {
+        "id": "n4",
+        "tag": "a",
+        "bbox": [
+          594,
+          344,
+          684,
+          363
+        ],
+        "style": {
+          "bg_color": "#214a10"
+        },
+        "asset_ref": "assets/n4_a.png",
+        "content": "info + token"
+      }
+    ]
+  }
+}

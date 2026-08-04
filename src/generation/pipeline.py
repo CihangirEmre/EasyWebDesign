@@ -1,21 +1,21 @@
-"""Aşama 4 — Generation: uçtan uca CLI.
+"""Aşama 4 — Generation: uçtan uca CLI (ScreenCoder-tarzı basit mimari).
 
-Girdi: Aşama 2b'nin (src/formatting) ürettiği `<stem>_formatted.json` + Aşama
-0/1'de kullanılan normalize edilmiş görsel. Sayfa tek seferde değil, ScreenCoder
-tarzı bölge bölge (root'un doğrudan çocukları, bkz. src/generation/regions.py)
-işlenir: her bölge kırpılıp kendi JSON alt-ağacıyla birlikte VLM'e verilir,
-üretilen HTML fragment'ları deterministik olarak root'un içine yerleştirilir
-(bkz. src/generation/assembly.py).
+Girdi: src/regions'ın ürettiği `<stem>_regions.json` (en fazla 4 kaba bölge:
+sidebar/header/navigation/main_content) + Aşama 0'da normalize edilmiş görsel.
+JSON alt-ağacı YOK — her bölge sadece kendi kırpılmış görüntüsü + region
+tipine özel doğal dil talimatıyla modele veriliyor (bkz. src/generation/prompts.py).
 
-Aşama 3'ün (src/assets) ürettiği gerçek asset dosyaları `asset_ref`
-yollarıyla eşleşecek şekilde çıktı klasörüne kopyalanmalı (bu script
-kopyalamaz, sadece HTML üretir — asset'ler ayrı pipeline'dan geliyor).
+Üretilen HTML fragment'ları, src/skeleton.py'nin ürettiği stilsiz iskeletteki
+ilgili id'li div'in içine enjekte edilir. Bu adımın çıktısı (`<stem>.html`),
+main_content içindeki gerçek fotoğraflar için hâlâ boş `img-placeholder`
+elemanları içerir — bunlar src/assets/placeholders.py tarafından üretim
+SONRASI gerçek crop'larla değiştirilir.
 
 Kullanım:
-    python -m src.generation.pipeline --formatted-dir formatting_results \
+    python -m src.generation.pipeline --regions-dir regions_results \
         --images-dir data/train/normalized --output-dir generation_results
 
-Gemini API kullanır (bkz. src/generation/model.py) — GEMINI_API_KEY ortam
+Claude API kullanır (bkz. src/generation/model.py) — ANTHROPIC_API_KEY ortam
 değişkeninin ayarlı olması gerekir.
 """
 
@@ -27,16 +27,15 @@ from pathlib import Path
 
 from PIL import Image
 
-from .assembly import assemble_document
+from src.skeleton import build_skeleton, inject_region_html
+
 from .inference import run_region_generation
 from .model import DEFAULT_MODEL_ID, load_generation_model
 from .postprocess import extract_html
-from .regions import select_regions
-from .repair import repair_flex_properties, repair_image_srcs, repair_visible_text
 
 
 def run(
-    formatted_dir: str | Path,
+    regions_dir: str | Path,
     images_dir: str | Path,
     output_dir: str | Path,
     client,
@@ -44,15 +43,14 @@ def run(
     *,
     max_new_tokens: int = 4096,
 ) -> None:
-    formatted_dir = Path(formatted_dir)
+    regions_dir = Path(regions_dir)
     images_dir = Path(images_dir)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for schema_path in sorted(formatted_dir.glob("*_formatted.json")):
-        stem = schema_path.stem.removesuffix("_formatted")
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
-        root = schema["root"]
+    for regions_path in sorted(regions_dir.glob("*_regions.json")):
+        stem = regions_path.stem.removesuffix("_regions")
+        regions = json.loads(regions_path.read_text(encoding="utf-8"))
 
         image_path = next(
             (p for ext in ("png", "jpg", "jpeg") if (p := images_dir / f"{stem}.{ext}").exists()),
@@ -63,39 +61,37 @@ def run(
             continue
         image = Image.open(image_path).convert("RGB")
 
-        print(f"→ İşleniyor: {stem}")
+        print(f"→ İşleniyor: {stem} ({len(regions)} region)")
+        skeleton_html = build_skeleton(regions, image.width, image.height)
+
         raw_texts: list[str] = []
-        region_htmls: list[str] = []
-        for region in select_regions(root):
+        for region in regions:
             x1, y1, x2, y2 = (int(v) for v in region["bbox"])
             crop = image.crop((x1, y1, x2, y2))
-            region_json = json.dumps(region, ensure_ascii=False)
 
-            raw_text = run_region_generation(client, model_id, crop, region_json, max_new_tokens=max_new_tokens)
+            raw_text = run_region_generation(
+                client, model_id, crop, region["label"], max_new_tokens=max_new_tokens
+            )
             raw_texts.append(raw_text)
-            region_htmls.append(extract_html(raw_text))
-
-        html = assemble_document(root, region_htmls)
-        html = repair_flex_properties(html)
-        html = repair_visible_text(html, root)
-        html = repair_image_srcs(html, root)
+            region_html = extract_html(raw_text)
+            skeleton_html = inject_region_html(skeleton_html, region["id"], region_html)
 
         (output_dir / f"{stem}_raw.txt").write_text("\n\n---\n\n".join(raw_texts), encoding="utf-8")
-        (output_dir / f"{stem}.html").write_text(html, encoding="utf-8")
+        (output_dir / f"{stem}.html").write_text(skeleton_html, encoding="utf-8")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Aşama 4 — Generation (Gemini, bölge bazlı)")
-    parser.add_argument("--formatted-dir", type=str, required=True)
+    parser = argparse.ArgumentParser(description="Aşama 4 — Generation (Claude, ScreenCoder-tarzı bölge bazlı)")
+    parser.add_argument("--regions-dir", type=str, required=True)
     parser.add_argument("--images-dir", type=str, required=True)
     parser.add_argument("--output-dir", type=str, default="generation_results")
     parser.add_argument("--model-id", type=str, default=DEFAULT_MODEL_ID)
-    parser.add_argument("--max-new-tokens", type=int, default=2048)
+    parser.add_argument("--max-new-tokens", type=int, default=4096)
     args = parser.parse_args()
 
     client, model_id = load_generation_model(args.model_id)
     run(
-        args.formatted_dir, args.images_dir, args.output_dir, client, model_id,
+        args.regions_dir, args.images_dir, args.output_dir, client, model_id,
         max_new_tokens=args.max_new_tokens,
     )
 

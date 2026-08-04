@@ -1,0 +1,63 @@
+{
+  "id": "root",
+  "bbox_2d": [
+    0.0,
+    0.0,
+    1000.0,
+    1000.0
+  ],
+  "label": "body",
+  "layout": {
+    "display": "flex",
+    "direction": "column",
+    "justify": "flex-start",
+    "align": "center",
+    "gap": 59
+  },
+  "children": [
+    {
+      "id": "g0",
+      "bbox_2d": [
+        165,
+        78,
+        833,
+        106
+      ],
+      "label": "paragraph",
+      "text": "No content is hosted on this website. This is a tool to download files from a user-provided GitHub repository URL."
+    },
+    {
+      "id": "g1",
+      "bbox_2d": [
+        254,
+        252,
+        744,
+        320
+      ],
+      "label": "heading",
+      "text": "download-directory • github • io"
+    },
+    {
+      "id": "g2",
+      "bbox_2d": [
+        266,
+        360,
+        732,
+        430
+      ],
+      "label": "input field",
+      "text": "Paste GitHub.com folder URL + press Enter"
+    },
+    {
+      "id": "g3",
+      "bbox_2d": [
+        464,
+        489,
+        534,
+        515
+      ],
+      "label": "link",
+      "text": "info + token"
+    }
+  ]
+}
