@@ -63,12 +63,14 @@ def replace_placeholders(
     kopyalar. Sonucu döner (ayrıca output_html_path'e de yazar)."""
     filled_html_path = Path(filled_html_path)
     assets_dir = Path(assets_dir)
+    output_html_path = Path(output_html_path)
+    output_html_path.parent.mkdir(parents=True, exist_ok=True)
     html_text = filled_html_path.read_text(encoding="utf-8")
 
     boxes, layout_width, layout_height = find_placeholder_boxes(filled_html_path)
 
     if not boxes:
-        Path(output_html_path).write_text(html_text, encoding="utf-8")
+        output_html_path.write_text(html_text, encoding="utf-8")
         return html_text
 
     with Image.open(original_image_path) as original:
@@ -100,5 +102,5 @@ def replace_placeholders(
             el.replace_with(img_tag)
 
     result = str(soup)
-    Path(output_html_path).write_text(result, encoding="utf-8")
+    output_html_path.write_text(result, encoding="utf-8")
     return result
