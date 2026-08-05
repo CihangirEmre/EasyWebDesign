@@ -6,10 +6,18 @@ ve region tipine (sidebar/header/navigation/main_content) özel bir doğal dil
 talimatı veriliyor. Yapı/renk/metin tamamen modelin kendi görsel yorumundan
 geliyor (ScreenCoderClone'un `html_generator.py::PROMPT_DICT`'i ile aynı
 felsefe). Gerçek fotoğraf/thumbnail'ları modelin üretim ANINDA, bilerek boş
-bir placeholder olarak işaretlemesi isteniyor (sadece main_content'te, tıpkı
-ScreenCoder'ın "images = gray block" talimatında olduğu gibi) — bu placeholder
-daha sonra src/assets/placeholders.py tarafından orijinal screenshot'tan
-gerçek bir crop ile değiştiriliyor.
+bir placeholder olarak işaretlemesi isteniyor — bu placeholder daha sonra
+src/assets/placeholders.py tarafından orijinal screenshot'tan gerçek bir
+crop ile değiştiriliyor.
+
+BUG DÜZELTMESİ (gerçek Colab çıktısı, upload_0000/YouTube sidebar): placeholder
+kuralı ilk sürümde SADECE main_content prompt'una eklenmişti (ScreenCoder'ın
+kendi kuralı da sadece "main content" için idi). Ama gerçek testte sidebar'daki
+kullanıcı avatarları için model bunun yerine UYDURMA bir dış URL üretti
+(`https://i.pravatar.cc/40?img=1` gibi) — hem sahte/yanlış görsel hem de
+render'ın internet erişimine bağımlı hale gelmesi anlamına geliyor. Artık
+placeholder kuralı TÜM region tiplerine uygulanıyor — herhangi bir bölge
+gerçek bir fotoğraf/avatar içerebilir, sadece main_content değil.
 
 Tailwind/CDN KULLANILMIYOR (offline/self-contained render gerekiyor — CLIP
 score değerlendirmesi internet erişimi olmadan da çalışmalı) — düz inline CSS.
@@ -56,18 +64,21 @@ _IMAGE_PLACEHOLDER_RULE = (
 REGION_PROMPTS: dict[str, str] = {
     "sidebar": (
         _SHARED_RULES
+        + _IMAGE_PLACEHOLDER_RULE
         + "\n\nThis section is a SIDEBAR (a vertical panel, usually with menu "
         "items, icons, or navigation links stacked vertically). Reproduce its "
         "vertical arrangement, icons, and labels exactly."
     ),
     "header": (
         _SHARED_RULES
+        + _IMAGE_PLACEHOLDER_RULE
         + "\n\nThis section is a HEADER (a top banner, usually containing a "
         "logo, title, and/or a row of controls). Reproduce the relative "
         "positions of its elements and their text/colors exactly."
     ),
     "navigation": (
         _SHARED_RULES
+        + _IMAGE_PLACEHOLDER_RULE
         + "\n\nThis section is a NAVIGATION bar (a menu/tab bar, usually a "
         "horizontal row of links or tabs). Reproduce the exact text of each "
         "link/tab and their order."

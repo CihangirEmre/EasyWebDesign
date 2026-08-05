@@ -97,8 +97,8 @@ def replace_placeholders(
             original.crop((x1, y1, x2, y2)).save(assets_dir / asset_name)
 
             img_tag = soup.new_tag("img", src=f"assets/{asset_name}")
-            style = el.get("style", "")
-            img_tag["style"] = f"{style};display:block;object-fit:cover;"
+            style = el.get("style", "").strip().rstrip(";")
+            img_tag["style"] = f"{style};display:block;object-fit:cover;" if style else "display:block;object-fit:cover;"
             el.replace_with(img_tag)
 
     result = str(soup)
