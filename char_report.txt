@@ -1,0 +1,2 @@
+upload_0001_raw.txt -> U+2304(⌄) U+25AE(▮) U+25AF(▯) U+2615(☕) U+2699(⚙) U+270F(✏) U+2733(✳) U+2B73(⭳) U+FE0F(️) U+1F393(🎓) U+1F399(🎙) U+1F3A8(🎨) U+1F4A1(💡) U+1F4AC(💬) U+1F4BC(💼) U+1F517(🔗) U+1F5C2(🗂) U+1F9EA(🧪)
+upload_0002_raw.txt -> U+2192(→) U+3002(。) U+FF08(（) U+FF09(）) U+FF0C(，) U+FF1A(：)
