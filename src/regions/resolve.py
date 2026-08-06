@@ -51,10 +51,21 @@ def _expand_main_content(regions: list[dict], canvas_width: int, canvas_height: 
     Bu yüzden main_content'i modele güvenmeden DETERMİNİSTİK olarak diğer 3
     bölgenin dışında kalan tüm kanvası kapsayacak şekilde genişletiyoruz
     (küçültmüyoruz — sadece BÜYÜTÜYORUZ, modelin doğru tespit ettiği kısmı
-    korumak için union alıyoruz). Klasik uygulama kabuğu varsayımı: sidebar
-    tam yükseklikte bir kenar sütunu, header tam genişlikte bir üst şerit,
-    navigation ana sütunun İÇİNDE (header'ın altında) bir çubuk — main_content
-    geri kalan her şeyi doldurur.
+    korumak için union alıyoruz).
+
+    BUG DÜZELTMESİ (gerçek Colab çıktısı, upload_0000): main_content'in
+    sınırını hesaplarken navigation'ın ALT kenarını da kullanmak (top =
+    max(top, nav.bottom)) navigation'ın kendi dar/sıkı tespit edilen
+    bbox'ının SOL/SAĞ/ÜST kenarlarındaki boşlukları kapatmıyordu — main_content
+    navigation'ın "bittiği yerden" başlıyordu, "arkasından" değil. Örnek: nav
+    bbox'ı x=[277,1546] iken kanvas genişliği 1632 olunca, x=[1546,1632]
+    aralığı (nav'ın sağı) hiçbir region'a girmiyordu.
+
+    Çözüm: main_content'i navigation'dan TAMAMEN bağımsız, sadece sidebar+
+    header'a göre hesaplıyoruz (kanvasın kalan TÜM dikdörtgeni) ve onu region
+    listesinin EN BAŞINA koyuyoruz — skeleton.py'de daha SONRA gelen (sidebar/
+    header/navigation) region'lar üstüne boyanır, böylece navigation'ın
+    etrafındaki her boşluk otomatik olarak altındaki main_content ile dolar.
     """
     by_label = {r["label"]: r for r in regions if r["label"] != "main_content"}
     main_regions = [r for r in regions if r["label"] == "main_content"]
@@ -74,22 +85,20 @@ def _expand_main_content(regions: list[dict], canvas_width: int, canvas_height: 
         _, _, _, hy2 = header["bbox"]
         top = max(top, hy2)
 
-    navigation = by_label.get("navigation")
-    if navigation:
-        nx1, _, nx2, ny2 = navigation["bbox"]
-        # navigation'ın x-aralığı ana sütunla örtüşüyorsa (sidebar'ın kendi
-        # içinde değil, üstte ayrı bir çubuksa) main_content ondan sonra başlar
-        if nx2 > left and nx1 < right:
-            top = max(top, ny2)
+    # navigation KASITLI OLARAK kullanılmıyor — main_content onun ALTINDA
+    # kalan tam dikdörtgeni kaplar, navigation üstüne bağımsız bir katman
+    # olarak boyanır (bkz. dönüş sırası: main_content en başta).
+
+    other_regions = [r for r in regions if r["label"] != "main_content"]
 
     if main_regions:
         target = main_regions[0]
         mx1, my1, mx2, my2 = target["bbox"]
         target["bbox"] = [min(mx1, left), min(my1, top), max(mx2, right), max(my2, bottom)]
-        return [r for r in regions if r["label"] != "main_content"] + [target]
+    else:
+        target = {"id": f"region_{len(regions)}", "label": "main_content", "bbox": [left, top, right, bottom]}
 
-    new_region = {"id": f"region_{len(regions)}", "label": "main_content", "bbox": [left, top, right, bottom]}
-    return regions + [new_region]
+    return [target] + other_regions
 
 
 def build_regions(detections: list[dict], image_width: int, image_height: int) -> list[dict]:
